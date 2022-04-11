@@ -1,6 +1,7 @@
 # esp32-mqtto-sensors
 test project to connect multiple sensors over esp32 wifi network
 
+
 /*
  *  This sketch demonstrates how to scan WiFi networks.
  *  The API is almost the same as with the WiFi Shield library,
