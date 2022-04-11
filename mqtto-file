@@ -1,15 +1,15 @@
-/*
- *  This sketch demonstrates how to scan WiFi networks.
- *  The API is almost the same as with the WiFi Shield library,
- *  the most obvious difference being the different file you need to include:
- */
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "YOUR_SSI";
-const char* password = "YOUR_PASSWORD";
+const char* ssid = "Best";
+const char* password = "Delmar77011";
 const char* mqttServer = "192.168.1.99";
 const int mqttPort = 1883;
+//IPAddress ip(192, 168, 1, 124);
+//IPAddress dns(8, 8, 8, 8);
+//IPAddress gw(192, 168, 1, 254);
+//IPAddress sn(255, 255, 255, 0); 
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 // Sensor de luz GPIO 34 (Analog ADC1_CH6) 
@@ -26,6 +26,8 @@ void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info){
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+  Serial.println(WiFi.gatewayIP());
+  Serial.println(WiFi.subnetMask());
 }
 void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info){
   Serial.println("Disconnected from WiFi access point");
@@ -36,11 +38,12 @@ void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info){
 }
 
 
-
 void setup(){
+//  WiFi.config(ip, dns, gw, sn);
   Serial.begin(115200);
   // delete old config
   WiFi.disconnect(true);
+  
   delay(1000);
   WiFi.onEvent(WiFiStationConnected, SYSTEM_EVENT_STA_CONNECTED);
   WiFi.onEvent(WiFiGotIP, SYSTEM_EVENT_STA_GOT_IP);
@@ -53,6 +56,7 @@ void setup(){
   Serial.println();
   Serial.println();
   Serial.println("Wait for WiFi... ");
+  delay(2000);
   client.setServer(mqttServer, mqttPort); 
   while (!client.connected()) {
     Serial.println("Connecting to MQTT..."); 
