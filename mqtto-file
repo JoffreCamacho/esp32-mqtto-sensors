@@ -1,15 +1,10 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include <ESP32Ping.h>
 
 const char* ssid = "Best";
 const char* password = "Delmar77011";
 const char* mqttServer = "192.168.1.99";
 const int mqttPort = 1883;
-//IPAddress ip(192, 168, 1, 124);
-//IPAddress dns(8, 8, 8, 8);
-//IPAddress gw(192, 168, 1, 254);
-//IPAddress sn(255, 255, 255, 0); 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -69,20 +64,14 @@ void setup(){
       delay(2000); 
     }
   }
-  client.publish("esp/test", "Hello from ESP32");
 }
 
 void loop(){
   // Reading potentiometer value
   LuzValue = analogRead(LuzPin);
   Serial.println(LuzValue);
-  
-  bool success = Ping.ping(mqttServer, 3);
-  if(!success){
-    Serial.println("Ping failed");
-    return;
-  }
-  Serial.println("Ping succesful.");
-  client.publish("esp/test", "Hello from ESP32");
-  delay(1000);
+  char miluz[8];  
+  itoa(LuzValue, miluz,10);
+  client.publish("esp/test", miluz);
+  delay(5000);
 }
