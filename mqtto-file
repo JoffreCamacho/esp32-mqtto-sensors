@@ -1,11 +1,12 @@
 #include <WiFi.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include <PubSubClient.h>
 
 const char* ssid = "Best";
 const char* password = "Delmar77011";
 const char* mqttServer = "192.168.1.99";
 const int mqttPort = 1883;
-
 WiFiClient espClient;
 PubSubClient client(espClient);
 // Sensor de luz GPIO 34 (Analog ADC1_CH6) 
@@ -14,6 +15,10 @@ int LuzValue = 0;
 long lastMsg = 0;
 char msg[50];
 int value = 0;
+//Sensor de temperatura GPIO 21
+const int TempPin = 21;     
+OneWire oneWire(TempPin);
+DallasTemperature sensors(&oneWire);
 
 void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info){
   Serial.println("Connected to AP successfully!");
@@ -37,6 +42,7 @@ void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info){
 void setup(){
 //  WiFi.config(ip, dns, gw, sn);
   Serial.begin(115200);
+  sensors.begin();
   // delete old config
   WiFi.disconnect(true);
   
@@ -73,5 +79,17 @@ void loop(){
   char miluz[8];  
   itoa(LuzValue, miluz,10);
   client.publish("esp/test", miluz);
+  
+  sensors.requestTemperatures(); 
+  float temperature_Celsius = sensors.getTempCByIndex(0);
+  float temperature_Fahrenheit = sensors.getTempFByIndex(0);
+  Serial.print("Temperature: ");
+  Serial.print(temperature_Celsius);
+  Serial.println(" ºC");
+  Serial.print("Temperature: ");
+  Serial.print(temperature_Fahrenheit);
+  Serial.println(" ºF");
+  Serial.println("");
   delay(5000);
+  
 }
