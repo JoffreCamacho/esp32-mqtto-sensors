@@ -75,6 +75,7 @@ void setup(){
 void loop(){
   // Reading potentiometer value
   LuzValue = analogRead(LuzPin);
+  Serial.print("Lectura Analogica de Luz");
   Serial.println(LuzValue);
   char miluz[8];  
   itoa(LuzValue, miluz,10);
@@ -90,6 +91,7 @@ void loop(){
   Serial.print(temperature_Fahrenheit);
   Serial.println(" ºF");
   Serial.println("");
+  client.publish("esp/temp", temperature_Celsius);
   delay(5000);
   
 }
