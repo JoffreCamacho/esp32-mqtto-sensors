@@ -32,6 +32,10 @@ int copyIndex = 0;
 float averageVoltage = 0;
 float tdsValue = 0;
 float temperature = 0;
+//Sensor turbidez
+const int TBDPin = 36;
+float volt;
+float ntu;
 //FUNCIONES
 void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   Serial.println("Connected to AP successfully!");
@@ -86,6 +90,31 @@ void setup() {
 ///// LOOP /////
 
 void loop() {
+  // Reading turbidity
+  float TBDValue = analogRead(TBDPin);
+  volt = 0;
+  for (int i = 0; i < 800; i++)
+  {
+    volt += ((float)analogRead(TBDPin) / 975);
+    delay(10);
+  }
+  volt = volt / 800;
+  volt = round_to_dp(volt, 2);
+  if (volt < 2.5) {
+    ntu = 3000;
+  } else {
+    ntu = -1120.4 * sq(volt) + 5742.3 * volt - 4353.8;
+  }
+  //lcd.clear();
+  //lcd.setCursor(0,0);
+  Serial.print(volt);
+  Serial.println(" V");
+
+  //lcd.setCursor(0,1);
+  Serial.print("TBD: ");
+  Serial.print(ntu);
+  Serial.println(" NTU");
+  delay(10);
 
   // Reading light value
   LuzValue = analogRead(LuzPin);
@@ -111,7 +140,7 @@ void loop() {
 
   // ESPACIO LIBRE
   static unsigned long analogSampleTimepoint = millis();
-  if (millis() - analogSampleTimepoint > 100U)  //every 100 milliseconds,read the analog value from the ADC
+  if (millis() - analogSampleTimepoint > 40U)  //every 40 milliseconds,read the analog value from the ADC
   {
     analogSampleTimepoint = millis();
     analogBuffer[analogBufferIndex] = analogRead(TdsSensorPin);    //read the analog value and store into the buffer
@@ -130,12 +159,18 @@ void loop() {
     float compensationVolatge = averageVoltage / compensationCoefficient; //temperature compensation
     tdsValue = (133.42 * compensationVolatge * compensationVolatge * compensationVolatge - 255.86 * compensationVolatge * compensationVolatge + 857.39 * compensationVolatge) * 0.5; //convert voltage value to tds value
   }
-     char tds[8];
-     itoa(tdsValue, tds, 10);
-    client.publish("esp/tds", tds);
-    Serial.print("TDS Value: ");
-    Serial.print(tdsValue, 0);
-    Serial.println(" ppm");
+  char tds[8];
+  itoa(tdsValue, tds, 10);
+  client.publish("esp/tds", tds);
+  Serial.print("TDS Value: ");
+  Serial.print(tdsValue, 0);
+  Serial.println(" ppm");
+}
+float round_to_dp( float in_value, int decimal_place )
+{
+  float multiplier = powf( 10.0f, decimal_place );
+  in_value = roundf( in_value * multiplier ) / multiplier;
+  return in_value;
 }
 int getMedianNum(int bArray[], int iFilterLen)
 {
@@ -162,5 +197,5 @@ int getMedianNum(int bArray[], int iFilterLen)
   return bTemp;
   // FIN ESPACIO LIBRE
 
-  delay(5000);
+  delay(1000);
 }
