@@ -89,7 +89,7 @@ void loop() {
 
   // Reading light value
   LuzValue = analogRead(LuzPin);
-  Serial.print("Lectura Analogica de Luz: ");
+  Serial.print("Analogic light value: ");
   Serial.println(LuzValue);
   char miluz[8];
   itoa(LuzValue, miluz, 10);
@@ -111,7 +111,7 @@ void loop() {
 
   // ESPACIO LIBRE
   static unsigned long analogSampleTimepoint = millis();
-  if (millis() - analogSampleTimepoint > 40U)  //every 40 milliseconds,read the analog value from the ADC
+  if (millis() - analogSampleTimepoint > 100U)  //every 100 milliseconds,read the analog value from the ADC
   {
     analogSampleTimepoint = millis();
     analogBuffer[analogBufferIndex] = analogRead(TdsSensorPin);    //read the analog value and store into the buffer
@@ -130,6 +130,9 @@ void loop() {
     float compensationVolatge = averageVoltage / compensationCoefficient; //temperature compensation
     tdsValue = (133.42 * compensationVolatge * compensationVolatge * compensationVolatge - 255.86 * compensationVolatge * compensationVolatge + 857.39 * compensationVolatge) * 0.5; //convert voltage value to tds value
   }
+     char tds[8];
+     itoa(tdsValue, tds, 10);
+    client.publish("esp/tds", tds);
     Serial.print("TDS Value: ");
     Serial.print(tdsValue, 0);
     Serial.println(" ppm");
