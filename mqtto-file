@@ -3,71 +3,44 @@
 #include <DallasTemperature.h>
 #include <PubSubClient.h>
 
+// Configuracion Inalambrica
 const char* ssid = "Best";
 const char* password = "Delmar77011";
+// Configuracion de MQTTO
 const char* mqttServer = "192.168.1.99";
 const int mqttPort = 1883;
 WiFiClient espClient;
 PubSubClient client(espClient);
-// Sensor de luz GPIO 34 (Analog ADC1_CH6) 
+//Sensor de luz GPIO 34 (Analog ADC1_CH6)
 const int LuzPin = 34;
 int LuzValue = 0;
 long lastMsg = 0;
 char msg[50];
 int value = 0;
 //Sensor de temperatura GPIO 21
-const int TempPin = 21;     
+const int TempPin = 21;
 OneWire oneWire(TempPin);
 DallasTemperature sensors(&oneWire);
-
+//Sensor TDS
 #define TdsSensorPin 35
-#define VREF 3.3              // analog reference voltage(Volt) of the ADC
-#define SCOUNT  30            // sum of sample point
-int analogBuffer[SCOUNT];     // store the analog value in the array, read from ADC
+#define VREF 3.3      // analog reference voltage(Volt) of the ADC
+#define SCOUNT  30           // sum of sample point 
+int analogBuffer[SCOUNT];    // store the analog value in the array, read from ADC
 int analogBufferTemp[SCOUNT];
 int analogBufferIndex = 0;
 int copyIndex = 0;
-
 float averageVoltage = 0;
 float tdsValue = 0;
-float temperature = 25;       // current temperature for compensation
-
-// median filtering algorithm
-int getMedianNum(int bArray[], int iFilterLen){
-  int bTab[iFilterLen];
-  for (byte i = 0; i<iFilterLen; i++)
-  bTab[i] = bArray[i];
-  int i, j, bTemp;
-  for (j = 0; j < iFilterLen - 1; j++) {
-    for (i = 0; i < iFilterLen - j - 1; i++) {
-      if (bTab[i] > bTab[i + 1]) {
-        bTemp = bTab[i];
-        bTab[i] = bTab[i + 1];
-        bTab[i + 1] = bTemp;
-      }
-    }
-  }
-  if ((iFilterLen & 1) > 0){
-    bTemp = bTab[(iFilterLen - 1) / 2];
-  }
-  else {
-    bTemp = (bTab[iFilterLen / 2] + bTab[iFilterLen / 2 - 1]) / 2;
-  }
-  return bTemp;
-}
-
-
-void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info){
+float temperature = 0;
+//FUNCIONES
+void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   Serial.println("Connected to AP successfully!");
 }
-void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info){
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-  Serial.println(WiFi.gatewayIP());
+void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+  Serial.println("WiFi connected"); Serial.println("IP address: "); Serial.println(WiFi.localIP()); Serial.println(WiFi.gatewayIP());
   Serial.println(WiFi.subnetMask());
 }
-void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info){
+void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   Serial.println("Disconnected from WiFi access point");
   Serial.print("WiFi lost connection. Reason: ");
   Serial.println(info.disconnected.reason);
@@ -75,97 +48,116 @@ void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info){
   WiFi.begin(ssid, password);
 }
 
+////// SETUP //////
 
-void setup(){
-//  WiFi.config(ip, dns, gw, sn);
+void setup() {
+  //  WiFi.config(ip, dns, gw, sn);
   Serial.begin(115200);
   sensors.begin();
-  pinMode(TdsSensorPin,INPUT);
+  pinMode(TdsSensorPin, INPUT);
   // delete old config
   WiFi.disconnect(true);
-  
   delay(1000);
   WiFi.onEvent(WiFiStationConnected, SYSTEM_EVENT_STA_CONNECTED);
   WiFi.onEvent(WiFiGotIP, SYSTEM_EVENT_STA_GOT_IP);
   WiFi.onEvent(WiFiStationDisconnected, SYSTEM_EVENT_STA_DISCONNECTED);
   /* Remove WiFi event
-  Serial.print("WiFi Event ID: ");
-  Serial.println(eventID);
-  WiFi.removeEvent(eventID);*/
+    Serial.print("WiFi Event ID: ");
+    Serial.println(eventID);
+    WiFi.removeEvent(eventID);*/
   WiFi.begin(ssid, password);
   Serial.println();
   Serial.println();
   Serial.println("Wait for WiFi... ");
   delay(10000);
-  client.setServer(mqttServer, mqttPort); 
+  client.setServer(mqttServer, mqttPort);
   while (!client.connected()) {
-    Serial.println("Connecting to MQTT..."); 
-    if (client.connect("ESP32Client")) { 
-      Serial.println("connected"); 
-    } else { 
+    Serial.println("Connecting to MQTT...");
+    if (client.connect("ESP32Client")) {
+      Serial.println("connected");
+    } else {
       Serial.print("failed with state ");
       Serial.print(client.state());
-      delay(2000); 
+      delay(2000);
     }
   }
 }
 
-void loop(){  
-  static unsigned long analogSampleTimepoint = millis();
-  if(millis()-analogSampleTimepoint > 40U){     //every 40 milliseconds,read the analog value from the ADC
-    analogSampleTimepoint = millis();
-    analogBuffer[analogBufferIndex] = analogRead(TdsSensorPin);    //read the analog value and store into the buffer
-    analogBufferIndex++;
-    if(analogBufferIndex == SCOUNT){ 
-      analogBufferIndex = 0;
-    }
-  // Reading potentiometer value
+///// LOOP /////
+
+void loop() {
+
+  // Reading light value
   LuzValue = analogRead(LuzPin);
   Serial.print("Lectura Analogica de Luz: ");
   Serial.println(LuzValue);
-  char miluz[8];  
-  itoa(LuzValue, miluz,10);
+  char miluz[8];
+  itoa(LuzValue, miluz, 10);
   client.publish("esp/luz", miluz);
-  
-  sensors.requestTemperatures(); 
-  float temperature_Celsius = sensors.getTempCByIndex(0);
-  float temperature_Fahrenheit = sensors.getTempFByIndex(0);
+  //Leyendo la temperatura
+  sensors.requestTemperatures();
+  float temperature = sensors.getTempCByIndex(0);
+  float temperature_f = sensors.getTempFByIndex(0);
   Serial.print("Temperature: ");
-  Serial.print(temperature_Celsius);
+  Serial.print(temperature);
   Serial.println(" ºC");
   Serial.print("Temperature: ");
-  Serial.print(temperature_Fahrenheit);
+  Serial.print(temperature_f);
   Serial.println(" ºF");
   Serial.println("");
   char TC[8];
-  itoa(temperature_Celsius,TC,10);
+  itoa(temperature, TC, 10);
   client.publish("esp/temp", TC);
-  delay(5000);
-  
-}
-static unsigned long printTimepoint = millis();
-  if(millis()-printTimepoint > 800U){
-    printTimepoint = millis();
-    for(copyIndex=0; copyIndex<SCOUNT; copyIndex++){
-      analogBufferTemp[copyIndex] = analogBuffer[copyIndex];
-      
-      // read the analog value more stable by the median filtering algorithm, and convert to voltage value
-      averageVoltage = getMedianNum(analogBufferTemp,SCOUNT) * (float)VREF / 4096.0;
-      
-      //temperature compensation formula: fFinalResult(25^C) = fFinalResult(current)/(1.0+0.02*(fTP-25.0)); 
-      float compensationCoefficient = 1.0+0.02*(temperature-25.0);
-      //temperature compensation
-      float compensationVoltage=averageVoltage/compensationCoefficient;
-      
-      //convert voltage value to tds value
-      tdsValue=(133.42*compensationVoltage*compensationVoltage*compensationVoltage - 255.86*compensationVoltage*compensationVoltage + 857.39*compensationVoltage)*0.5;
-      
-      //Serial.print("voltage:");
-      //Serial.print(averageVoltage,2);
-      //Serial.print("V   ");
-      Serial.print("TDS Value: ");
-      Serial.print(tdsValue,0);
-      Serial.println(" ppm");
-    }
-}
+
+  // ESPACIO LIBRE
+  static unsigned long analogSampleTimepoint = millis();
+  if (millis() - analogSampleTimepoint > 40U)  //every 40 milliseconds,read the analog value from the ADC
+  {
+    analogSampleTimepoint = millis();
+    analogBuffer[analogBufferIndex] = analogRead(TdsSensorPin);    //read the analog value and store into the buffer
+    analogBufferIndex++;
+    if (analogBufferIndex == SCOUNT)
+      analogBufferIndex = 0;
   }
+  static unsigned long printTimepoint = millis();
+  if (millis() - printTimepoint > 800U)
+  {
+    printTimepoint = millis();
+    for (copyIndex = 0; copyIndex < SCOUNT; copyIndex++)
+      analogBufferTemp[copyIndex] = analogBuffer[copyIndex];
+    averageVoltage = getMedianNum(analogBufferTemp, SCOUNT) * (float)VREF / 1024.0; // read the analog value more stable by the median filtering algorithm, and convert to voltage value
+    float compensationCoefficient = 1.0 + 0.02 * (temperature - 25.0); //temperature compensation formula: fFinalResult(25^C) = fFinalResult(current)/(1.0+0.02*(fTP-25.0));
+    float compensationVolatge = averageVoltage / compensationCoefficient; //temperature compensation
+    tdsValue = (133.42 * compensationVolatge * compensationVolatge * compensationVolatge - 255.86 * compensationVolatge * compensationVolatge + 857.39 * compensationVolatge) * 0.5; //convert voltage value to tds value
+  }
+    Serial.print("TDS Value: ");
+    Serial.print(tdsValue, 0);
+    Serial.println(" ppm");
+}
+int getMedianNum(int bArray[], int iFilterLen)
+{
+  int bTab[iFilterLen];
+  for (byte i = 0; i < iFilterLen; i++)
+    bTab[i] = bArray[i];
+  int i, j, bTemp;
+  for (j = 0; j < iFilterLen - 1; j++)
+  {
+    for (i = 0; i < iFilterLen - j - 1; i++)
+    {
+      if (bTab[i] > bTab[i + 1])
+      {
+        bTemp = bTab[i];
+        bTab[i] = bTab[i + 1];
+        bTab[i + 1] = bTemp;
+      }
+    }
+  }
+  if ((iFilterLen & 1) > 0)
+    bTemp = bTab[(iFilterLen - 1) / 2];
+  else
+    bTemp = (bTab[iFilterLen / 2] + bTab[iFilterLen / 2 - 1]) / 2;
+  return bTemp;
+  // FIN ESPACIO LIBRE
+
+  delay(5000);
+}
