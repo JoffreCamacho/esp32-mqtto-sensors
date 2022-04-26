@@ -161,6 +161,7 @@ void loop() {
   Serial.print("TDS Value: ");
   Serial.print(tdsValue, 0);
   Serial.println(" ppm");
+  Serial.println(" ");
 }
 float round_to_dp( float in_value, int decimal_place )
 {
