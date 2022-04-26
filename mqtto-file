@@ -118,6 +118,7 @@ void loop() {
   Serial.print("Temperature: ");
   Serial.print(temperature_f);
   Serial.println(" ºF");
+  Serial.print("TBD Sensor Voltage: ");
   Serial.print(volt);
   Serial.println(" V");
   Serial.print("TBD: ");
