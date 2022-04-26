@@ -95,8 +95,8 @@ void loop() {
   volt = 0;
   for (int i = 0; i < 800; i++)
   {
-    volt += ((float)analogRead(TBDPin) / 975);
-    delay(10);
+    volt += ((float)analogRead(TBDPin) / 4095)*5;
+    delay(1);
   }
   volt = volt / 800;
   volt = round_to_dp(volt, 2);
@@ -105,24 +105,9 @@ void loop() {
   } else {
     ntu = -1120.4 * sq(volt) + 5742.3 * volt - 4353.8;
   }
-  //lcd.clear();
-  //lcd.setCursor(0,0);
-  Serial.print(volt);
-  Serial.println(" V");
-
-  //lcd.setCursor(0,1);
-  Serial.print("TBD: ");
-  Serial.print(ntu);
-  Serial.println(" NTU");
-  delay(10);
-
-  // Reading light value
-  LuzValue = analogRead(LuzPin);
-  Serial.print("Analogic light value: ");
-  Serial.println(LuzValue);
-  char miluz[8];
-  itoa(LuzValue, miluz, 10);
-  client.publish("esp/luz", miluz);
+  Serial.println("///////////////////////////////////");
+  Serial.println("            Probe Values           ");
+  Serial.println("///////////////////////////////////");
   //Leyendo la temperatura
   sensors.requestTemperatures();
   float temperature = sensors.getTempCByIndex(0);
@@ -133,7 +118,18 @@ void loop() {
   Serial.print("Temperature: ");
   Serial.print(temperature_f);
   Serial.println(" ºF");
-  Serial.println("");
+  Serial.print(volt);
+  Serial.println(" V");
+  Serial.print("TBD: ");
+  Serial.print(ntu);
+  Serial.println(" NTU");
+  // Reading light value
+  LuzValue = analogRead(LuzPin);
+  Serial.print("Analogic light value: ");
+  Serial.println(LuzValue);
+  char miluz[8];
+  itoa(LuzValue, miluz, 10);
+  client.publish("esp/luz", miluz);
   char TC[8];
   itoa(temperature, TC, 10);
   client.publish("esp/temp", TC);
