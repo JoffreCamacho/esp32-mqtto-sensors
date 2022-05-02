@@ -105,13 +105,12 @@ void ph() {
   float phvoltage = phsensorvalue * (5.0 / 4095.0);
   // print out the value you read:
   Serial.println(phvoltage);
-  delay(300);
 }
 
 void turbidity() {
   float TBDValue = analogRead(TBDPin);
   volt = 0;
-  sens = 2000;
+  sens = 500;
   for (int i = 0; i < sens; i++)
   {
     volt += ((float)analogRead(TBDPin) / 4095) * 4.2; //analog reading between 0-4095
@@ -223,12 +222,6 @@ void loop() {
   Serial.println("            Probe Values           ");
   Serial.println("///////////////////////////////////");
 
-  // Reading ph
-  //ph();
-
-  // Reading turbidity - TBD
-  turbidity();
-
   // Reading temperature
   temperatura();
 
@@ -237,6 +230,12 @@ void loop() {
 
   // Reading light value
   lights();
+  
+  // Reading ph
+  ph();
+  
+  // Reading turbidity - TBD
+  turbidity();
   delay (5000);
 } //END LOOP
 
