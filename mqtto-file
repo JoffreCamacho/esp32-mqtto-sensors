@@ -5,7 +5,7 @@
 
 //temporizador de sensores
 int mil = 1000;
-int seg = 30; // segundos
+int seg = 20; // segundos
 int t = mil * seg;
 
 //// Configuracion Inalambrica
