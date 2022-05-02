@@ -160,7 +160,6 @@ void solids() {
   Serial.print("TDS Value: ");
   Serial.print(tdsValue, 0);
   Serial.println(" ppm");
-  Serial.println(" ");
 }
 
 void lights() {
@@ -238,6 +237,6 @@ void loop() {
 
   // Reading light value
   lights();
-
+  delay (5000);
 } //END LOOP
 
