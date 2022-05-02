@@ -101,6 +101,9 @@ void temperatura() {
   Serial.print("Temperature: ");
   Serial.print(temperature_f);
   Serial.println(" ºF");
+  char temp[8];
+  itoa(temperature, temp, 10);
+  client.publish("esp/temp", temp);
 }
 void ph() {
   // Reading PH
@@ -173,9 +176,6 @@ void lights() {
   char miluz[8];
   itoa(LuzValue, miluz, 10);
   client.publish("esp/luz", miluz);
-  char TC[8];
-  itoa(temperature, TC, 10);
-  client.publish("esp/temp", TC);
 }
 float round_to_dp( float in_value, int decimal_place )
 {
@@ -241,6 +241,7 @@ void loop() {
 
   // Reading turbidity - TBD
   turbidity();
+  
   delay (t);
 } //END LOOP
 
