@@ -3,6 +3,11 @@
 #include <DallasTemperature.h>
 #include <PubSubClient.h>
 
+//temporizador de sensores
+int mil = 1000;
+int seg = 30; // segundos
+int t = mil * seg;
+
 //// Configuracion Inalambrica
 const char* ssid = "Best";
 const char* password = "Delmar77011";
@@ -230,12 +235,12 @@ void loop() {
 
   // Reading light value
   lights();
-  
+
   // Reading ph
   ph();
-  
+
   // Reading turbidity - TBD
   turbidity();
-  delay (5000);
+  delay (t);
 } //END LOOP
 
