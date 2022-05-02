@@ -3,28 +3,32 @@
 #include <DallasTemperature.h>
 #include <PubSubClient.h>
 
-// Configuracion Inalambrica
+//// Configuracion Inalambrica
 const char* ssid = "Best";
 const char* password = "Delmar77011";
+
 // Configuracion de MQTTO
 const char* mqttServer = "192.168.1.99";
 const int mqttPort = 1883;
 WiFiClient espClient;
 PubSubClient client(espClient);
-//Sensor de luz GPIO 34 (Analog ADC1_CH6)
+
+////Sensor de luz GPIO 34 (Analog ADC1_CH6)
 const int LuzPin = 34;
 int LuzValue = 0;
 long lastMsg = 0;
 char msg[50];
 int value = 0;
-//Sensor de temperatura GPIO 21
+
+////Sensor de temperatura GPIO 21
 const int TempPin = 21;
 OneWire oneWire(TempPin);
 DallasTemperature sensors(&oneWire);
-//Sensor TDS
+
+////TDS Sensor
 #define TdsSensorPin 35
 #define VREF 3.3      // analog reference voltage(Volt) of the ADC
-#define SCOUNT  30           // sum of sample point 
+#define SCOUNT  30           // sum of sample point
 int analogBuffer[SCOUNT];    // store the analog value in the array, read from ADC
 int analogBufferTemp[SCOUNT];
 int analogBufferIndex = 0;
@@ -32,11 +36,18 @@ int copyIndex = 0;
 float averageVoltage = 0;
 float tdsValue = 0;
 float temperature = 0;
-//Sensor turbidez
+
+////TBD Sensor
 const int TBDPin = 36;
 float volt;
 float ntu;
-//FUNCIONES
+int sens = 0;
+
+////PH Sensor
+#define PhSensorPin 39
+
+
+////FUNCIONES
 void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   Serial.println("Connected to AP successfully!");
 }
@@ -51,24 +62,12 @@ void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   Serial.println("Trying to Reconnect");
   WiFi.begin(ssid, password);
 }
-
-////// SETUP //////
-
-void setup() {
-  //  WiFi.config(ip, dns, gw, sn);
-  Serial.begin(115200);
-  sensors.begin();
-  pinMode(TdsSensorPin, INPUT);
-  // delete old config
+void conexionWifi() {
   WiFi.disconnect(true);
   delay(1000);
   WiFi.onEvent(WiFiStationConnected, SYSTEM_EVENT_STA_CONNECTED);
   WiFi.onEvent(WiFiGotIP, SYSTEM_EVENT_STA_GOT_IP);
   WiFi.onEvent(WiFiStationDisconnected, SYSTEM_EVENT_STA_DISCONNECTED);
-  /* Remove WiFi event
-    Serial.print("WiFi Event ID: ");
-    Serial.println(eventID);
-    WiFi.removeEvent(eventID);*/
   WiFi.begin(ssid, password);
   Serial.println();
   Serial.println();
@@ -86,28 +85,7 @@ void setup() {
     }
   }
 }
-
-///// LOOP /////
-
-void loop() {
-  // Reading turbidity
-  float TBDValue = analogRead(TBDPin);
-  volt = 0;
-  for (int i = 0; i < 800; i++)
-  {
-    volt += ((float)analogRead(TBDPin) / 4095)*5;
-    delay(1);
-  }
-  volt = volt / 800;
-  volt = round_to_dp(volt, 2);
-  if (volt < 2.5) {
-    ntu = 3000;
-  } else {
-    ntu = -1120.4 * sq(volt) + 5742.3 * volt - 4353.8;
-  }
-  Serial.println("///////////////////////////////////");
-  Serial.println("            Probe Values           ");
-  Serial.println("///////////////////////////////////");
+void temperatura() {
   //Leyendo la temperatura
   sensors.requestTemperatures();
   float temperature = sensors.getTempCByIndex(0);
@@ -118,24 +96,44 @@ void loop() {
   Serial.print("Temperature: ");
   Serial.print(temperature_f);
   Serial.println(" ºF");
+}
+void ph() {
+  // Reading PH
+  int phsensorvalue = analogRead(PhSensorPin);
+  Serial.println("PH pin value");
+  Serial.println(phsensorvalue);
+  float phvoltage = phsensorvalue * (5.0 / 4095.0);
+  // print out the value you read:
+  Serial.println(phvoltage);
+  delay(300);
+}
+
+void turbidity() {
+  float TBDValue = analogRead(TBDPin);
+  volt = 0;
+  sens = 2000;
+  for (int i = 0; i < sens; i++)
+  {
+    volt += ((float)analogRead(TBDPin) / 4095) * 4.2; //analog reading between 0-4095
+    delay(1);
+  }
+  volt = volt / sens;
+  volt = round_to_dp(volt, 2);
+  if (volt < 2.5) {
+    ntu = 3000;
+  } else {
+    ntu = -1120.4 * sq(volt) + 5742.3 * volt - 4353.8;
+  }
   Serial.print("TBD Sensor Voltage: ");
   Serial.print(volt);
   Serial.println(" V");
   Serial.print("TBD: ");
   Serial.print(ntu);
   Serial.println(" NTU");
-  // Reading light value
-  LuzValue = analogRead(LuzPin);
-  Serial.print("Analogic light value: ");
-  Serial.println(LuzValue);
-  char miluz[8];
-  itoa(LuzValue, miluz, 10);
-  client.publish("esp/luz", miluz);
-  char TC[8];
-  itoa(temperature, TC, 10);
-  client.publish("esp/temp", TC);
+}
 
-  // ESPACIO LIBRE
+void solids() {
+  pinMode(TdsSensorPin, INPUT);
   static unsigned long analogSampleTimepoint = millis();
   if (millis() - analogSampleTimepoint > 40U)  //every 40 milliseconds,read the analog value from the ADC
   {
@@ -164,12 +162,25 @@ void loop() {
   Serial.println(" ppm");
   Serial.println(" ");
 }
+
+void lights() {
+  LuzValue = analogRead(LuzPin);
+  Serial.print("Analogic light value: ");
+  Serial.println(LuzValue);
+  char miluz[8];
+  itoa(LuzValue, miluz, 10);
+  client.publish("esp/luz", miluz);
+  char TC[8];
+  itoa(temperature, TC, 10);
+  client.publish("esp/temp", TC);
+}
 float round_to_dp( float in_value, int decimal_place )
 {
   float multiplier = powf( 10.0f, decimal_place );
   in_value = roundf( in_value * multiplier ) / multiplier;
   return in_value;
 }
+
 int getMedianNum(int bArray[], int iFilterLen)
 {
   int bTab[iFilterLen];
@@ -193,7 +204,40 @@ int getMedianNum(int bArray[], int iFilterLen)
   else
     bTemp = (bTab[iFilterLen / 2] + bTab[iFilterLen / 2 - 1]) / 2;
   return bTemp;
-  // FIN ESPACIO LIBRE
-
-  delay(1000);
 }
+
+//////// SETUP //////
+//
+void setup() {
+  sensors.begin();
+  // delete old config
+  Serial.begin(115200);
+  conexionWifi();
+
+}// END SETUP //
+//
+/////// LOOP /////
+//
+void loop() {
+
+  Serial.println("///////////////////////////////////");
+  Serial.println("            Probe Values           ");
+  Serial.println("///////////////////////////////////");
+
+  // Reading ph
+  //ph();
+
+  // Reading turbidity - TBD
+  turbidity();
+
+  // Reading temperature
+  temperatura();
+
+  // Reading total dissolve solids - TDS
+  solids();
+
+  // Reading light value
+  lights();
+
+} //END LOOP
+
