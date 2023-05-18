@@ -1,0 +1,128 @@
+#include <WiFi.h>
+#include <ESPmDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
+#include <PubSubClient.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <ArduinoJson.h>
+
+#define ONE_WIRE_BUS 2 // DS18B20 pin
+#define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
+
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+const char* ssid = "your wifi";
+const char* password = "your password";
+const char* mqttServer = "192.168.2.113";
+const int mqttPort = 1883;
+
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Booting");
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connection Failed! Rebooting...");
+    delay(5000);
+    ESP.restart();
+  }
+
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH)
+        type = "sketch";
+      else 
+        type = "filesystem";
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+
+  ArduinoOTA.begin();
+
+  Serial.println("Ready");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  mqttClient.setServer(mqttServer, mqttPort);
+  mqttClient.setCallback(mqttCallback);
+
+  sensors.begin(); // Initialize DS18B20 sensor
+  pinMode(LIGHT_SENSOR_PIN, INPUT); // Initialize LX1972 light sensor
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  // Handle incoming MQTT messages here
+}
+
+void connectToMqtt() {
+  while (!mqttClient.connected()) {
+    Serial.println("Connecting to MQTT server...");
+    if (mqttClient.connect("ESP32Client")) {
+      Serial.println("Connected to MQTT server");
+    } else {
+      Serial.print("Failed to connect to MQTT server, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" Retrying in 5 seconds...");
+      delay(5000);
+    }
+  }
+}
+
+void loop() {
+  if (!mqttClient.connected()) {
+    connectToMqtt();
+  }
+  mqttClient.loop();
+  ArduinoOTA.handle();
+
+  // Read temperature
+  sensors.requestTemperatures();
+  float temperatureC = sensors.getTempCByIndex(0);
+
+  // Read light intensity
+  int lightIntensity = analogRead(LIGHT_SENSOR_PIN);
+
+  // Get ESP32 MAC address
+  String macAddress = WiFi.macAddress();
+
+  // Create JSON document
+  StaticJsonDocument<200> doc;
+  doc["macAddress"] = macAddress;
+  doc["temperatureC"] = temperatureC;
+  doc["lightIntensity"] = lightIntensity;
+  
+  char jsonBuffer[512];
+  serializeJson(doc, jsonBuffer); // Serialize the JSON document
+
+  mqttClient.publish("esp32/sensorData", jsonBuffer);
+  Serial.print("Temperature: ");
+  Serial.print(temperatureC);
+  Serial.println(" C");
+  Serial.print("Light Intensity: ");
+  Serial.println(lightIntensity);
+  Serial.print("MAC Address: ");
+  Serial.println(macAddress);
+
+  delay(10000); // Delay for 10 seconds
+}
