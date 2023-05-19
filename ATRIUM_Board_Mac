@@ -7,7 +7,7 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 
-#define ONE_WIRE_BUS 2 // DS18B20 pin
+#define ONE_WIRE_BUS 26 // DS18B20 pin
 #define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
 
 OneWire oneWire(ONE_WIRE_BUS);
