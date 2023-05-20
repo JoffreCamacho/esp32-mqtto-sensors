@@ -1,3 +1,5 @@
+//For ATRIUM CDR with love by Joffre Camacho - 2023
+
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
@@ -9,11 +11,12 @@
 
 #define ONE_WIRE_BUS 26 // DS18B20 pin
 #define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
+#define RELAY_PIN 27 // Relay control pin
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-const char* ssid = "your wifi";
+const char* ssid = "your SSID";
 const char* password = "your password";
 const char* mqttServer = "192.168.2.113";
 const int mqttPort = 1883;
@@ -69,6 +72,8 @@ void setup() {
 
   sensors.begin(); // Initialize DS18B20 sensor
   pinMode(LIGHT_SENSOR_PIN, INPUT); // Initialize LX1972 light sensor
+  pinMode(RELAY_PIN, OUTPUT); // Set relay pin as output
+
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -106,11 +111,29 @@ void loop() {
   // Get ESP32 MAC address
   String macAddress = WiFi.macAddress();
 
+  // Control the relay based on received MQTT messages
+  if (mqttClient.connected()) {
+    if (mqttClient.subscribe("esp32/relay")) {
+      mqttClient.onMessage([=](const String& topic, const String& payload) {
+        if (payload == "on") {
+          digitalWrite(RELAY_PIN, HIGH); // Turn on relay
+          relayState = true; // Update relay state
+          Serial.println("Relay turned on");
+        } else if (payload == "off") {
+          digitalWrite(RELAY_PIN, LOW); // Turn off relay
+          relayState = false; // Update relay state
+          Serial.println("Relay turned off");
+        }
+      });
+    }
+  }
+
   // Create JSON document
   StaticJsonDocument<200> doc;
   doc["macAddress"] = macAddress;
   doc["temperatureC"] = temperatureC;
   doc["lightIntensity"] = lightIntensity;
+  doc["relayState"] = relayState; // Include relay state in JSON
   
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // Serialize the JSON document
@@ -123,6 +146,8 @@ void loop() {
   Serial.println(lightIntensity);
   Serial.print("MAC Address: ");
   Serial.println(macAddress);
+  Serial.print("Relay State: ");
+  Serial.println(relayState);
 
   delay(10000); // Delay for 10 seconds
 }
