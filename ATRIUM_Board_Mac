@@ -16,13 +16,15 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-const char* ssid = "your SSID";
-const char* password = "your password";
+const char* ssid = "NETGEAR92";
+const char* password = "rockycream207";
 const char* mqttServer = "192.168.2.113";
 const int mqttPort = 1883;
 
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
+
+bool relayState = false; // Variable to store the state of the relay
 
 void setup() {
   Serial.begin(115200);
@@ -78,6 +80,20 @@ void setup() {
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   // Handle incoming MQTT messages here
+  String message = "";
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  
+  if (message == "on") {
+    digitalWrite(RELAY_PIN, HIGH); // Turn on relay
+    relayState = true; // Update relay state
+    Serial.println("Relay turned on");
+  } else if (message == "off") {
+    digitalWrite(RELAY_PIN, LOW); // Turn off relay
+    relayState = false; // Update relay state
+    Serial.println("Relay turned off");
+  }
 }
 
 void connectToMqtt() {
@@ -85,6 +101,7 @@ void connectToMqtt() {
     Serial.println("Connecting to MQTT server...");
     if (mqttClient.connect("ESP32Client")) {
       Serial.println("Connected to MQTT server");
+      mqttClient.subscribe("esp32/relay"); // Subscribe to relay topic
     } else {
       Serial.print("Failed to connect to MQTT server, rc=");
       Serial.print(mqttClient.state());
@@ -110,23 +127,6 @@ void loop() {
 
   // Get ESP32 MAC address
   String macAddress = WiFi.macAddress();
-
-  // Control the relay based on received MQTT messages
-  if (mqttClient.connected()) {
-    if (mqttClient.subscribe("esp32/relay")) {
-      mqttClient.onMessage([=](const String& topic, const String& payload) {
-        if (payload == "on") {
-          digitalWrite(RELAY_PIN, HIGH); // Turn on relay
-          relayState = true; // Update relay state
-          Serial.println("Relay turned on");
-        } else if (payload == "off") {
-          digitalWrite(RELAY_PIN, LOW); // Turn off relay
-          relayState = false; // Update relay state
-          Serial.println("Relay turned off");
-        }
-      });
-    }
-  }
 
   // Create JSON document
   StaticJsonDocument<200> doc;
