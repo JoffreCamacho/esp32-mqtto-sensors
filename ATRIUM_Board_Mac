@@ -10,8 +10,10 @@
 #include <ArduinoJson.h>
 
 #define ONE_WIRE_BUS 26 // DS18B20 pin
-#define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
 #define RELAY_PIN 27 // Relay control pin
+#define TURBIDITY_SENSOR_PIN 32 // change this to the pin you've connected the sensor to
+#define MAX_SENSOR_VALUE 4095 // max value for a 12-bit ADC
+#define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -75,15 +77,18 @@ void setup() {
   sensors.begin(); // Initialize DS18B20 sensor
   pinMode(LIGHT_SENSOR_PIN, INPUT); // Initialize LX1972 light sensor
   pinMode(RELAY_PIN, OUTPUT); // Set relay pin as output
+  analogReadResolution(12); // ESP32 has 12-bit resolution
 
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  // Handle incoming MQTT messages here
+  Serial.println("Entered mqttCallback");
   String message = "";
   for (int i = 0; i < length; i++) {
     message += (char)payload[i];
   }
+
+  Serial.println("Message: " + message);
   
   if (message == "on") {
     digitalWrite(RELAY_PIN, HIGH); // Turn on relay
@@ -97,6 +102,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 void connectToMqtt() {
+  Serial.println("Entered connectToMqtt");
   while (!mqttClient.connected()) {
     Serial.println("Connecting to MQTT server...");
     if (mqttClient.connect("ESP32Client")) {
@@ -112,6 +118,8 @@ void connectToMqtt() {
 }
 
 void loop() {
+  Serial.print("Free memory: ");
+  Serial.println(ESP.getFreeHeap());
   if (!mqttClient.connected()) {
     connectToMqtt();
   }
@@ -128,11 +136,16 @@ void loop() {
   // Get ESP32 MAC address
   String macAddress = WiFi.macAddress();
 
+  // Get Turbidity
+  int sensorValue = analogRead(TURBIDITY_SENSOR_PIN);
+  int turbidity = MAX_SENSOR_VALUE - sensorValue; // invert the reading
+  
   // Create JSON document
   StaticJsonDocument<200> doc;
   doc["macAddress"] = macAddress;
   doc["temperatureC"] = temperatureC;
   doc["lightIntensity"] = lightIntensity;
+  doc["turbidity"]= turbidity;
   doc["relayState"] = relayState; // Include relay state in JSON
   
   char jsonBuffer[512];
@@ -144,10 +157,12 @@ void loop() {
   Serial.println(" C");
   Serial.print("Light Intensity: ");
   Serial.println(lightIntensity);
+  Serial.print("Sensor Value: ");
+  Serial.println(turbidity);
   Serial.print("MAC Address: ");
   Serial.println(macAddress);
   Serial.print("Relay State: ");
   Serial.println(relayState);
 
-  delay(10000); // Delay for 10 seconds
+  delay(2000); // Delay for 2 seconds (must not be higher that 5 or OTA will not work)
 }
