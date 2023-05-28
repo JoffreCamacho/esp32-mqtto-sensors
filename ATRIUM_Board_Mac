@@ -14,6 +14,8 @@
 #define TURBIDITY_SENSOR_PIN 32 // change this to the pin you've connected the sensor to
 #define MAX_SENSOR_VALUE 4095 // max value for a 12-bit ADC
 #define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
+#define TDS_SENSOR_PIN 35 // TDS_Sensor PIN
+
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -140,12 +142,16 @@ void loop() {
   int sensorValue = analogRead(TURBIDITY_SENSOR_PIN);
   int turbidity = MAX_SENSOR_VALUE - sensorValue; // invert the reading
   
+  // Get TDS
+  int tdsValue = analogRead(TDS_SENSOR_PIN);
+  
   // Create JSON document
   StaticJsonDocument<200> doc;
   doc["macAddress"] = macAddress;
   doc["temperatureC"] = temperatureC;
   doc["lightIntensity"] = lightIntensity;
   doc["turbidity"]= turbidity;
+  doc["tds"] = tdsValue;
   doc["relayState"] = relayState; // Include relay state in JSON
   
   char jsonBuffer[512];
@@ -159,6 +165,8 @@ void loop() {
   Serial.println(lightIntensity);
   Serial.print("Sensor Value: ");
   Serial.println(turbidity);
+  Serial.print("TDS Value: ");
+  Serial.println(tdsValue);
   Serial.print("MAC Address: ");
   Serial.println(macAddress);
   Serial.print("Relay State: ");
