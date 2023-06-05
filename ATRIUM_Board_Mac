@@ -9,10 +9,12 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 
+#define RELAY2_PIN 25 // Light Relay control pin
 #define ONE_WIRE_BUS 26 // DS18B20 pin
-#define RELAY_PIN 27 // Relay control pin
+#define RELAY_PIN 27 // Pump Relay control pin
 #define TURBIDITY_SENSOR_PIN 32 // change this to the pin you've connected the sensor to
 #define MAX_SENSOR_VALUE 4095 // max value for a 12-bit ADC
+#define RELAY3_PIN 33 // Heater Relay control pin
 #define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
 #define TDS_SENSOR_PIN 35 // TDS_Sensor PIN
 
@@ -22,13 +24,16 @@ DallasTemperature sensors(&oneWire);
 
 const char* ssid = "YOUR SSID";
 const char* password = "YOUR PASSWORD";
-const char* mqttServer = "192.168.2.113";
-const int mqttPort = 1883;
+const char* mqttServer = "MQTT SERVER IP";
+const int mqttPort = MQTT SERVER PORT;
 
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
 bool relayState = false; // Variable to store the state of the relay
+bool relay2State = false; // Variable to store the state of the second relay
+bool relay3State = false; // Variable to store the state of the third relay
+
 
 void setup() {
   Serial.begin(115200);
@@ -79,6 +84,8 @@ void setup() {
   sensors.begin(); // Initialize DS18B20 sensor
   pinMode(LIGHT_SENSOR_PIN, INPUT); // Initialize LX1972 light sensor
   pinMode(RELAY_PIN, OUTPUT); // Set relay pin as output
+  pinMode(RELAY2_PIN, OUTPUT); // Set second relay pin as output
+  pinMode(RELAY3_PIN, OUTPUT); // Set third relay pin as output
   analogReadResolution(12); // ESP32 has 12-bit resolution
 
 }
@@ -91,15 +98,38 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   Serial.println("Message: " + message);
-  
-  if (message == "on") {
-    digitalWrite(RELAY_PIN, HIGH); // Turn on relay
-    relayState = true; // Update relay state
-    Serial.println("Relay turned on");
-  } else if (message == "off") {
-    digitalWrite(RELAY_PIN, LOW); // Turn off relay
-    relayState = false; // Update relay state
-    Serial.println("Relay turned off");
+
+  // Depending on the topic, control the corresponding relay
+  if (String(topic) == "esp32/relay1") {
+    if (message == "on") {
+      digitalWrite(RELAY_PIN, HIGH);
+      relayState = true;
+      Serial.println("Relay 1 turned on");
+    } else if (message == "off") {
+      digitalWrite(RELAY_PIN, LOW);
+      relayState = false;
+      Serial.println("Relay 1 turned off");
+    }
+  } else if (String(topic) == "esp32/relay2") {
+    if (message == "on") {
+      digitalWrite(RELAY2_PIN, HIGH);
+      relay2State = true;
+      Serial.println("Relay 2 turned on");
+    } else if (message == "off") {
+      digitalWrite(RELAY2_PIN, LOW);
+      relay2State = false;
+      Serial.println("Relay 2 turned off");
+    }
+  } else if (String(topic) == "esp32/relay3") {
+    if (message == "on") {
+      digitalWrite(RELAY3_PIN, HIGH);
+      relay3State = true;
+      Serial.println("Relay 3 turned on");
+    } else if (message == "off") {
+      digitalWrite(RELAY3_PIN, LOW);
+      relay3State = false;
+      Serial.println("Relay 3 turned off");
+    }
   }
 }
 
@@ -109,7 +139,9 @@ void connectToMqtt() {
     Serial.println("Connecting to MQTT server...");
     if (mqttClient.connect("ESP32Client")) {
       Serial.println("Connected to MQTT server");
-      mqttClient.subscribe("esp32/relay"); // Subscribe to relay topic
+      mqttClient.subscribe("esp32/relay1");
+      mqttClient.subscribe("esp32/relay2");
+      mqttClient.subscribe("esp32/relay3");
     } else {
       Serial.print("Failed to connect to MQTT server, rc=");
       Serial.print(mqttClient.state());
@@ -153,6 +185,10 @@ void loop() {
   doc["turbidity"]= turbidity;
   doc["tds"] = tdsValue;
   doc["relayState"] = relayState; // Include relay state in JSON
+  doc["relay2State"] = relay2State; // Include second relay state in JSON
+  doc["relay3State"] = relay3State; // Include third relay state in JSON
+
+  //Se puede actualizar el codigo via Wifi al ESP32
   
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // Serialize the JSON document
@@ -171,6 +207,10 @@ void loop() {
   Serial.println(macAddress);
   Serial.print("Relay State: ");
   Serial.println(relayState);
+  Serial.print("Relay 2 State: ");
+  Serial.println(relay2State);
+  Serial.print("Relay 3 State: ");
+  Serial.println(relay3State);
 
   delay(2000); // Delay for 2 seconds (must not be higher that 5 or OTA will not work)
 }
