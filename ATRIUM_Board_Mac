@@ -12,12 +12,14 @@
 #define RELAY2_PIN 25 // Light Relay control pin
 #define ONE_WIRE_BUS 26 // DS18B20 pin
 #define RELAY_PIN 27 // Pump Relay control pin
-#define TURBIDITY_SENSOR_PIN 32 // change this to the pin you've connected the sensor to
+#define TURBIDITY_SENSOR_PIN 32 // Turbidity sensor pin
 #define MAX_SENSOR_VALUE 4095 // max value for a 12-bit ADC
 #define RELAY3_PIN 33 // Heater Relay control pin
 #define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
 #define TDS_SENSOR_PIN 35 // TDS_Sensor PIN
-#define CO2_SENSOR_PIN 36 // MS1100 CO2 sensor pin, change according to your wiring
+#define CO2_SENSOR_PIN 36 // MS1100 CO2 sensor pin
+#define PH_SENSOR_PIN 39 // PH-014 sensor pin
+
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -88,6 +90,7 @@ void setup() {
   pinMode(RELAY3_PIN, OUTPUT); // Set third relay pin as output
   analogReadResolution(12); // ESP32 has 12-bit resolution
   pinMode(CO2_SENSOR_PIN, INPUT); // Initialize CO2 sensor
+  pinMode(PH_SENSOR_PIN, INPUT); // Initialize PH sensor
 
 
 }
@@ -181,6 +184,9 @@ void loop() {
 
   // Read CO2 sensor value
   int CO2 = analogRead(CO2_SENSOR_PIN); 
+
+  // Read PH sensor value
+  int phValue = analogRead(PH_SENSOR_PIN); 
   
   // Create JSON document
   StaticJsonDocument<200> doc;
@@ -190,6 +196,7 @@ void loop() {
   doc["turbidity"]= turbidity;
   doc["tds"] = tdsValue;
   doc["CO2"] = CO2; 
+  doc["phValue"] = phValue; // Include PH value in JSON
   doc["relayState"] = relayState; // Include relay state in JSON
   doc["relay2State"] = relay2State; // Include second relay state in JSON
   doc["relay3State"] = relay3State; // Include third relay state in JSON
@@ -213,6 +220,8 @@ void loop() {
   Serial.println(macAddress);
   Serial.print("CO2 Value: ");
   Serial.println(CO2);
+  Serial.print("PH Value: ");
+  Serial.println(phValue);
   Serial.print("Relay State: ");
   Serial.println(relayState);
   Serial.print("Relay 2 State: ");
