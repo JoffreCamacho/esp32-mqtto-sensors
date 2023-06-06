@@ -17,7 +17,7 @@
 #define RELAY3_PIN 33 // Heater Relay control pin
 #define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
 #define TDS_SENSOR_PIN 35 // TDS_Sensor PIN
-
+#define CO2_SENSOR_PIN 36 // MS1100 CO2 sensor pin, change according to your wiring
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -87,6 +87,8 @@ void setup() {
   pinMode(RELAY2_PIN, OUTPUT); // Set second relay pin as output
   pinMode(RELAY3_PIN, OUTPUT); // Set third relay pin as output
   analogReadResolution(12); // ESP32 has 12-bit resolution
+  pinMode(CO2_SENSOR_PIN, INPUT); // Initialize CO2 sensor
+
 
 }
 
@@ -176,6 +178,9 @@ void loop() {
   
   // Get TDS
   int tdsValue = analogRead(TDS_SENSOR_PIN);
+
+  // Read CO2 sensor value
+  int CO2 = analogRead(CO2_SENSOR_PIN); 
   
   // Create JSON document
   StaticJsonDocument<200> doc;
@@ -184,6 +189,7 @@ void loop() {
   doc["lightIntensity"] = lightIntensity;
   doc["turbidity"]= turbidity;
   doc["tds"] = tdsValue;
+  doc["CO2"] = CO2; 
   doc["relayState"] = relayState; // Include relay state in JSON
   doc["relay2State"] = relay2State; // Include second relay state in JSON
   doc["relay3State"] = relay3State; // Include third relay state in JSON
@@ -205,6 +211,8 @@ void loop() {
   Serial.println(tdsValue);
   Serial.print("MAC Address: ");
   Serial.println(macAddress);
+  Serial.print("CO2 Value: ");
+  Serial.println(CO2);
   Serial.print("Relay State: ");
   Serial.println(relayState);
   Serial.print("Relay 2 State: ");
