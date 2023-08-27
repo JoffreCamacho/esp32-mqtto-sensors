@@ -8,7 +8,11 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
+#include <NewPing.h>
 
+#define TRIGGER_PIN 23  // Define trigger pin
+#define ECHO_PIN 22     // Define echo pin
+#define MAX_DISTANCE 100 // Maximum distance we want to ping for (in centimeters) 
 #define RELAY2_PIN 25 // Light Relay control pin
 #define ONE_WIRE_BUS 26 // DS18B20 pin
 #define RELAY_PIN 27 // Pump Relay control pin
@@ -24,10 +28,10 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-const char* ssid = "YOUR SSID";
-const char* password = "YOUR PASSWORD";
-const char* mqttServer = "MQTT SERVER IP";
-const int mqttPort = MQTT SERVER PORT;
+const char* ssid = "NETGEAR92";
+const char* password = "rockycream207";
+const char* mqttServer = "192.168.2.113";
+const int mqttPort = 1883;
 
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
@@ -36,6 +40,7 @@ bool relayState = false; // Variable to store the state of the relay
 bool relay2State = false; // Variable to store the state of the second relay
 bool relay3State = false; // Variable to store the state of the third relay
 
+NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup
 
 void setup() {
   Serial.begin(115200);
@@ -168,6 +173,7 @@ void loop() {
   // Read temperature
   sensors.requestTemperatures();
   float temperatureC = sensors.getTempCByIndex(0);
+  float temperatureC2 = sensors.getTempCByIndex(1);
 
   // Read light intensity
   int lightIntensity = analogRead(LIGHT_SENSOR_PIN);
@@ -188,10 +194,19 @@ void loop() {
   // Read PH sensor value
   int phValue = analogRead(PH_SENSOR_PIN); 
   
+  // Send ping, get ping time in microseconds (uS).
+  unsigned int uS = sonar.ping(); 
+  float distance = uS / US_ROUNDTRIP_CM;  // Convert ping time to distance in cm
+
+  // Let's say you want to represent the tank's state as a percentage:
+  float tankPercentage = (100.0 - (distance / 100.0 * 100.0));
+
+  
   // Create JSON document
   StaticJsonDocument<200> doc;
   doc["macAddress"] = macAddress;
-  doc["temperatureC"] = temperatureC;
+  doc["temperatureC"] = temperatureC; // Tank
+  doc["temperatureC2"] = temperatureC2; // Box temperature in Celsius
   doc["lightIntensity"] = lightIntensity;
   doc["turbidity"]= turbidity;
   doc["tds"] = tdsValue;
@@ -200,6 +215,8 @@ void loop() {
   doc["relayState"] = relayState; // Include relay state in JSON
   doc["relay2State"] = relay2State; // Include second relay state in JSON
   doc["relay3State"] = relay3State; // Include third relay state in JSON
+  doc["tankPercentage"] = tankPercentage;
+
 
   //Se puede actualizar el codigo via Wifi al ESP32
   
@@ -209,6 +226,9 @@ void loop() {
   mqttClient.publish("esp32/sensorData", jsonBuffer);
   Serial.print("Temperature: ");
   Serial.print(temperatureC);
+  Serial.println(" C");
+  Serial.print("Temperature 2: ");
+  Serial.print(temperatureC2);
   Serial.println(" C");
   Serial.print("Light Intensity: ");
   Serial.println(lightIntensity);
@@ -222,6 +242,8 @@ void loop() {
   Serial.println(CO2);
   Serial.print("PH Value: ");
   Serial.println(phValue);
+  Serial.print("Tank Percentage: ");
+  Serial.println(tankPercentage);
   Serial.print("Relay State: ");
   Serial.println(relayState);
   Serial.print("Relay 2 State: ");
