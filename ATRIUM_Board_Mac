@@ -28,8 +28,8 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-const char* ssid = "NETGEAR92";
-const char* password = "rockycream207";
+const char* ssid = "your SSID name";
+const char* password = "your SSID Password";
 const char* mqttServer = "192.168.2.113";
 const int mqttPort = 1883;
 
