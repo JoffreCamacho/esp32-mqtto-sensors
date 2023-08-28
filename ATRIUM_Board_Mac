@@ -9,27 +9,32 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 #include <NewPing.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BMP280.h>
 
-#define TRIGGER_PIN 23  // Define trigger pin
+#define BMP_SDA_PIN 21
+#define BMP_SCL_PIN 19
 #define ECHO_PIN 22     // Define echo pin
-#define MAX_DISTANCE 100 // Maximum distance we want to ping for (in centimeters) 
+#define TRIGGER_PIN 23  // Define trigger pin
 #define RELAY2_PIN 25 // Light Relay control pin
 #define ONE_WIRE_BUS 26 // DS18B20 pin
 #define RELAY_PIN 27 // Pump Relay control pin
 #define TURBIDITY_SENSOR_PIN 32 // Turbidity sensor pin
-#define MAX_SENSOR_VALUE 4095 // max value for a 12-bit ADC
 #define RELAY3_PIN 33 // Heater Relay control pin
 #define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
 #define TDS_SENSOR_PIN 35 // TDS_Sensor PIN
 #define CO2_SENSOR_PIN 36 // MS1100 CO2 sensor pin
 #define PH_SENSOR_PIN 39 // PH-014 sensor pin
+#define MAX_DISTANCE 100 // Maximum distance we want to ping for (in centimeters) 
+#define MAX_SENSOR_VALUE 4095 // max value for a 12-bit ADC
 
-
+Adafruit_BMP280 bmp; // I2C interface for BMP280
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-const char* ssid = "your SSID name";
-const char* password = "your SSID Password";
+const char* ssid = "your SSID";
+const char* password = "your password";
 const char* mqttServer = "192.168.2.113";
 const int mqttPort = 1883;
 
@@ -87,8 +92,12 @@ void setup() {
 
   mqttClient.setServer(mqttServer, mqttPort);
   mqttClient.setCallback(mqttCallback);
-
+  Wire.begin(BMP_SDA_PIN, BMP_SCL_PIN); // Explicitly set I2C pins
   sensors.begin(); // Initialize DS18B20 sensor
+  if (!bmp.begin(0x76)) {   // Initialize BMP280 sensor
+    Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+    while (1);
+  }
   pinMode(LIGHT_SENSOR_PIN, INPUT); // Initialize LX1972 light sensor
   pinMode(RELAY_PIN, OUTPUT); // Set relay pin as output
   pinMode(RELAY2_PIN, OUTPUT); // Set second relay pin as output
@@ -174,6 +183,8 @@ void loop() {
   sensors.requestTemperatures();
   float temperatureC = sensors.getTempCByIndex(0);
   float temperatureC2 = sensors.getTempCByIndex(1);
+  float bmpTemperature = bmp.readTemperature(); // Temperature from BMP280 in °C
+  float pressure = bmp.readPressure() / 100.0F; // Pressure from BMP280 in hPa
 
   // Read light intensity
   int lightIntensity = analogRead(LIGHT_SENSOR_PIN);
@@ -207,6 +218,8 @@ void loop() {
   doc["macAddress"] = macAddress;
   doc["temperatureC"] = temperatureC; // Tank
   doc["temperatureC2"] = temperatureC2; // Box temperature in Celsius
+  doc["bmpTemperature"] = bmpTemperature;
+  doc["pressure"] = pressure;
   doc["lightIntensity"] = lightIntensity;
   doc["turbidity"]= turbidity;
   doc["tds"] = tdsValue;
@@ -230,6 +243,12 @@ void loop() {
   Serial.print("Temperature 2: ");
   Serial.print(temperatureC2);
   Serial.println(" C");
+  Serial.print("BMP Temperature: ");
+  Serial.print(bmpTemperature);
+  Serial.println(" C");
+  Serial.print("Pressure: ");
+  Serial.print(pressure);
+  Serial.println(" hPa");
   Serial.print("Light Intensity: ");
   Serial.println(lightIntensity);
   Serial.print("Sensor Value: ");
