@@ -13,9 +13,7 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
 
-#define BMP_SDA_PIN 21
-#define BMP_SCL_PIN 19
-#define ECHO_PIN 22     // Define echo pin
+#define ECHO_PIN 18     // Define echo pin
 #define TRIGGER_PIN 23  // Define trigger pin
 #define RELAY2_PIN 25 // Light Relay control pin
 #define ONE_WIRE_BUS 26 // DS18B20 pin
@@ -27,6 +25,7 @@
 #define CO2_SENSOR_PIN 36 // MS1100 CO2 sensor pin
 #define PH_SENSOR_PIN 39 // PH-014 sensor pin
 #define MAX_DISTANCE 100 // Maximum distance we want to ping for (in centimeters) 
+#define SEALEVELPRESSURE_HPA (1010.01)
 #define MAX_SENSOR_VALUE 4095 // max value for a 12-bit ADC
 
 Adafruit_BMP280 bmp; // I2C interface for BMP280
@@ -53,7 +52,7 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  
+
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     Serial.println("Connection Failed! Rebooting...");
     delay(5000);
@@ -65,7 +64,7 @@ void setup() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH)
         type = "sketch";
-      else 
+      else
         type = "filesystem";
       Serial.println("Start updating " + type);
     })
@@ -92,21 +91,37 @@ void setup() {
 
   mqttClient.setServer(mqttServer, mqttPort);
   mqttClient.setCallback(mqttCallback);
-  Wire.begin(BMP_SDA_PIN, BMP_SCL_PIN); // Explicitly set I2C pins
-  sensors.begin(); // Initialize DS18B20 sensor
-  if (!bmp.begin(0x76)) {   // Initialize BMP280 sensor
-    Serial.println("Could not find a valid BMP280 sensor, check wiring!");
-    while (1);
+  Wire.begin();
+
+  Serial.println("\nI2C Scanner");
+
+  for (byte address = 1; address < 127; ++address) {
+    Wire.beginTransmission(address);
+    byte error = Wire.endTransmission();
+
+    if (error == 0) {
+      Serial.print("Found device at address 0x");
+      if (address < 16) {
+        Serial.print("0");
+      }
+      Serial.println(address, HEX);
+    }
   }
-  pinMode(LIGHT_SENSOR_PIN, INPUT); // Initialize LX1972 light sensor
-  pinMode(RELAY_PIN, OUTPUT); // Set relay pin as output
-  pinMode(RELAY2_PIN, OUTPUT); // Set second relay pin as output
-  pinMode(RELAY3_PIN, OUTPUT); // Set third relay pin as output
-  analogReadResolution(12); // ESP32 has 12-bit resolution
-  pinMode(CO2_SENSOR_PIN, INPUT); // Initialize CO2 sensor
-  pinMode(PH_SENSOR_PIN, INPUT); // Initialize PH sensor
+  //bme.begin();
+  if (!bme.begin(0x77)) {
+    Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+    while (1)
+      ;
+  }
 
-
+  sensors.begin();
+  pinMode(LIGHT_SENSOR_PIN, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(RELAY2_PIN, OUTPUT);
+  pinMode(RELAY3_PIN, OUTPUT);
+  analogReadResolution(12);
+  pinMode(CO2_SENSOR_PIN, INPUT);
+  pinMode(PH_SENSOR_PIN, INPUT);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
