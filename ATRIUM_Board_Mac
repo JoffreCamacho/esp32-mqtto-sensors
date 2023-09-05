@@ -13,17 +13,17 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
 
-#define ECHO_PIN 18     // Define echo pin
-#define TRIGGER_PIN 23  // Define trigger pin
-#define RELAY2_PIN 25 // Light Relay control pin
-#define ONE_WIRE_BUS 26 // DS18B20 pin
-#define RELAY_PIN 27 // Pump Relay control pin
-#define TURBIDITY_SENSOR_PIN 32 // Turbidity sensor pin
-#define RELAY3_PIN 33 // Heater Relay control pin
-#define LIGHT_SENSOR_PIN 34 // LX1972 light sensor pin
-#define TDS_SENSOR_PIN 35 // TDS_Sensor PIN
-#define CO2_SENSOR_PIN 36 // MS1100 CO2 sensor pin
-#define PH_SENSOR_PIN 39 // PH-014 sensor pin
+#define ECHO_PIN 18     // HC-SR04 Define echo - 5v
+#define TRIGGER_PIN 23  // HC-SR04 Define trigger - 3.3v
+#define RELAY2_PIN 25 // Light Relay control - 3.3v
+#define ONE_WIRE_BUS 26 // DS18B20 - 3.3v 
+#define RELAY_PIN 27 // Pump Relay control - 5v
+#define TURBIDITY_SENSOR_PIN 32 // Turbidity sensor - 5v
+#define RELAY3_PIN 33 // Heater Relay control - 5v 
+#define LIGHT_SENSOR_PIN 34 // LX1972 light sensor - 3.3v
+#define TDS_SENSOR_PIN 35 // TDS_Sensor - 3.3v
+#define CO2_SENSOR_PIN 36 // MS1100 CO2 sensor - 5v
+#define PH_SENSOR_PIN 39 // PH-014 sensor - 5v
 #define MAX_DISTANCE 100 // Maximum distance we want to ping for (in centimeters) 
 #define SEALEVELPRESSURE_HPA (1010.01)
 #define MAX_SENSOR_VALUE 4095 // max value for a 12-bit ADC
