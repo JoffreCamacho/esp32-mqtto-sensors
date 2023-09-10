@@ -11,7 +11,7 @@
 #include <NewPing.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
-#include <Adafruit_BMP280.h>
+#include <Adafruit_BME280.h>
 
 #define ECHO_PIN 18     // HC-SR04 Define echo - 5v
 #define TRIGGER_PIN 23  // HC-SR04 Define trigger - 3.3v
@@ -37,6 +37,254 @@ const char* password = "your password";
 const char* mqttServer = "192.168.2.113";
 const int mqttPort = 1883;
 
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
+
+bool relayState = false; // Variable to store the state of the relay
+bool relay2State = false; // Variable to store the state of the second relay
+bool relay3State = false; // Variable to store the state of the third relay
+
+NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Booting");
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connection Failed! Rebooting...");
+    delay(5000);
+    ESP.restart();
+  }
+
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH)
+        type = "sketch";
+      else
+        type = "filesystem";
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+
+  ArduinoOTA.begin();
+
+  Serial.println("Ready");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  mqttClient.setServer(mqttServer, mqttPort);
+  mqttClient.setCallback(mqttCallback);
+
+  //bme.begin();
+  if (!bme.begin(0x76)) {  // Default I2C address 0x76
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+    //while (1);
+  }
+
+  sensors.begin();
+  pinMode(LIGHT_SENSOR_PIN, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(RELAY2_PIN, OUTPUT);
+  pinMode(RELAY3_PIN, OUTPUT);
+  analogReadResolution(12);
+  pinMode(CO2_SENSOR_PIN, INPUT);
+  pinMode(PH_SENSOR_PIN, INPUT);
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  Serial.println("Entered mqttCallback");
+  String message = "";
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+
+  Serial.println("Message: " + message);
+
+  // Depending on the topic, control the corresponding relay
+  if (String(topic) == "esp32/relay1") {
+    if (message == "on") {
+      digitalWrite(RELAY_PIN, HIGH);
+      relayState = true;
+      Serial.println("Relay 1 turned on");
+    } else if (message == "off") {
+      digitalWrite(RELAY_PIN, LOW);
+      relayState = false;
+      Serial.println("Relay 1 turned off");
+    }
+  } else if (String(topic) == "esp32/relay2") {
+    if (message == "on") {
+      digitalWrite(RELAY2_PIN, HIGH);
+      relay2State = true;
+      Serial.println("Relay 2 turned on");
+    } else if (message == "off") {
+      digitalWrite(RELAY2_PIN, LOW);
+      relay2State = false;
+      Serial.println("Relay 2 turned off");
+    }
+  } else if (String(topic) == "esp32/relay3") {
+    if (message == "on") {
+      digitalWrite(RELAY3_PIN, HIGH);
+      relay3State = true;
+      Serial.println("Relay 3 turned on");
+    } else if (message == "off") {
+      digitalWrite(RELAY3_PIN, LOW);
+      relay3State = false;
+      Serial.println("Relay 3 turned off");
+    }
+  }
+}
+
+void connectToMqtt() {
+  Serial.println("Entered connectToMqtt");
+  while (!mqttClient.connected()) {
+    Serial.println("Connecting to MQTT server...");
+    if (mqttClient.connect("ESP32Client")) {
+      Serial.println("Connected to MQTT server");
+      mqttClient.subscribe("esp32/relay1");
+      mqttClient.subscribe("esp32/relay2");
+      mqttClient.subscribe("esp32/relay3");
+    } else {
+      Serial.print("Failed to connect to MQTT server, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" Retrying in 5 seconds...");
+      delay(5000);
+    }
+  }
+}
+
+void loop() {
+  Serial.print("Free memory: ");
+  Serial.println(ESP.getFreeHeap());
+  if (!mqttClient.connected()) {
+    connectToMqtt();
+  }
+  mqttClient.loop();
+  ArduinoOTA.handle();
+
+  // Read temperature
+  sensors.requestTemperatures();
+  float temperatureC = sensors.getTempCByIndex(0);
+  float temperatureC2 = sensors.getTempCByIndex(1);
+
+  // Initialize variables for BME280 data
+  float bmeTemperature = -999.0; // Default value if sensor is not detected
+  float pressure = -999.0; // Default value if sensor is not detected
+  float humidity = -999.0; // Default value if sensor is not detected
+
+  // Check if the BME280 sensor is available
+  if (bme.begin(0x76)) { // Default I2C address 0x76
+    // Read data from the BME280 sensor
+    bmeTemperature = bme.readTemperature(); // Temperature in °C
+    pressure = bme.readPressure() / 100.0F; // Pressure in hPa
+    humidity = bme.readHumidity(); // Humidity as a percentage
+  }
+
+  // Read light intensity
+  int lightIntensity = analogRead(LIGHT_SENSOR_PIN);
+
+  // Get ESP32 MAC address
+  String macAddress = WiFi.macAddress();
+
+  // Get Turbidity
+  int sensorValue = analogRead(TURBIDITY_SENSOR_PIN);
+  int turbidity = MAX_SENSOR_VALUE - sensorValue; // invert the reading
+  
+  // Get TDS
+  int tdsValue = analogRead(TDS_SENSOR_PIN);
+
+  // Read CO2 sensor value
+  int CO2 = analogRead(CO2_SENSOR_PIN); 
+
+  // Read PH sensor value
+  int phValue = analogRead(PH_SENSOR_PIN); 
+  
+  // Send ping, get ping time in microseconds (uS).
+  unsigned int uS = sonar.ping(); 
+  float distance = uS / US_ROUNDTRIP_CM;  // Convert ping time to distance in cm
+
+  // Let's say you want to represent the tank's state as a percentage:
+  float tankPercentage = (100.0 - (distance / 100.0 * 100.0));
+
+  
+  // Create JSON document
+  StaticJsonDocument<200> doc;
+  doc["macAddress"] = macAddress;
+  doc["temperatureC"] = temperatureC; // Tank
+  doc["temperatureC2"] = temperatureC2; // Box temperature in Celsius
+  doc["bmeTemperature"] = bmeTemperature;
+  doc["pressure"] = pressure;
+  doc["humidity"] = humidity;
+  doc["lightIntensity"] = lightIntensity;
+  doc["turbidity"]= turbidity;
+  doc["tds"] = tdsValue;
+  doc["CO2"] = CO2; 
+  doc["phValue"] = phValue; // Include PH value in JSON
+  doc["relayState"] = relayState; // Include relay state in JSON
+  doc["relay2State"] = relay2State; // Include second relay state in JSON
+  doc["relay3State"] = relay3State; // Include third relay state in JSON
+  doc["tankPercentage"] = tankPercentage;
+
+  //Se puede actualizar el codigo via Wifi al ESP32
+ 
+  char jsonBuffer[512];
+  serializeJson(doc, jsonBuffer); // Serialize the JSON document
+
+  mqttClient.publish("esp32/sensorData", jsonBuffer);
+  Serial.print("Temperature: ");
+  Serial.print(temperatureC);
+  Serial.println(" C");
+  Serial.print("Temperature 2: ");
+  Serial.print(temperatureC2);
+  Serial.println(" C");
+  Serial.print("BMP Temperature: ");
+  Serial.print(bmeTemperature);
+  Serial.println(" C");
+  Serial.print("Pressure: ");
+  Serial.print(pressure);
+  Serial.println(" hPa");
+  Serial.print("Humidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+  Serial.print("Light Intensity: ");
+  Serial.println(lightIntensity);
+  Serial.print("Sensor Value: ");
+  Serial.println(turbidity);
+  Serial.print("TDS Value: ");
+  Serial.println(tdsValue);
+  Serial.print("MAC Address: ");
+  Serial.println(macAddress);
+  Serial.print("CO2 Value: ");
+  Serial.println(CO2);
+  Serial.print("PH Value: ");
+  Serial.println(phValue);
+  Serial.print("Tank Percentage: ");
+  Serial.println(tankPercentage);
+  Serial.print("Relay State: ");
+  Serial.println(relayState);
+  Serial.print("Relay 2 State: ");
+  Serial.println(relay2State);
+  Serial.print("Relay 3 State: ");
+  Serial.println(relay3State);
+
+  delay(2000); // Delay for 2 seconds (must not be higher that 5 or OTA will not work)
+}
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
