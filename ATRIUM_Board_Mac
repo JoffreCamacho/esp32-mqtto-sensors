@@ -12,7 +12,7 @@
 #include <ESPAsyncWebSrv.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-#include <driver/adc.h>
+//#include <driver/adc.h>
 
 // 21 SCL 22 SDA
 
@@ -72,7 +72,7 @@ void setup() {
   }
 
   ArduinoOTA
-    .onStart([]() {
+  .onStart([]() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH)
         type = "sketch";
@@ -109,22 +109,24 @@ void setup() {
   bme.begin(0x76);
   sensors1.begin();
   sensors2.begin();
-  pinMode(LIGHT_SENSOR_PIN, INPUT); //this can create idm
+  
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(RELAY2_PIN, OUTPUT);
   pinMode(RELAY3_PIN, OUTPUT);
   analogReadResolution(12);
-  pinMode(CO2_SENSOR_PIN, INPUT);
-  pinMode(PH_SENSOR_PIN, INPUT);
+
   digitalWrite(RELAY_PIN, HIGH); // Ensure relay starts off
   digitalWrite(RELAY2_PIN, HIGH); // Ensure relay starts off
   digitalWrite(RELAY3_PIN, HIGH); // Ensure relay starts off
-  //gpio_viewer.begin();
+
+  // pinMode(LIGHT_SENSOR_PIN, INPUT); //this can create idm
+  // pinMode(CO2_SENSOR_PIN, INPUT);
+  // pinMode(PH_SENSOR_PIN, INPUT);
   
   // Set the pins for the sensors as inputs with pull-down resistors
-  //pinMode(TURBIDITY_SENSOR_PIN, INPUT_PULLDOWN);
-  //pinMode(TDS_SENSOR_PIN, INPUT_PULLDOWN);
-  //pinMode(LIGHT_SENSOR_PIN, INPUT_PULLDOWN);
+  pinMode(TURBIDITY_SENSOR_PIN, INPUT_PULLDOWN);
+  pinMode(TDS_SENSOR_PIN, INPUT_PULLDOWN);
+  pinMode(LIGHT_SENSOR_PIN, INPUT_PULLDOWN);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -171,11 +173,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 void connectToMqtt() {
-  Serial.println("Entered connectToMqtt");
+  //Serial.println("Entered connectToMqtt");
   while (!mqttClient.connected()) {
-    Serial.println("Connecting to MQTT server...");
+    //Serial.println("Connecting to MQTT server...");
     if (mqttClient.connect("ESP32Client")) {
-      Serial.print("Connected to MQTT server");
+      //Serial.print("Connected to MQTT server ");
       mqttClient.subscribe("esp32/relay1");
       mqttClient.subscribe("esp32/relay2");
       mqttClient.subscribe("esp32/relay3");
@@ -204,9 +206,9 @@ void loop() {
   float temperatureC2 = sensors2.getTempCByIndex(0); // Temperature from sensor on ONE_WIRE_BUS2 BOX
 
     // Initialize variables for BME280 data
-  float bmeTemperature = -999.0;  // Default value if sensor is not detected
-  float pressure = -999.0;        // Default value if sensor is not detected
-  float humidity = -999.0;        // Default value if sensor is not detected
+  float bmeTemperature = -99.0;  // Default value if sensor is not detected
+  float pressure = -99.0;        // Default value if sensor is not detected
+  float humidity = -99.0;        // Default value if sensor is not detected
 
   // Do not reinitialize; just read from the sensor
   bmeTemperature = bme.readTemperature();
@@ -238,7 +240,7 @@ void loop() {
 
 
   // Create JSON document
-  StaticJsonDocument<220> doc;
+  DynamicJsonDocument doc(256);
   doc["macAddress"] = macAddress;
   doc["temperatureC1"] = temperatureC1;    // Tank
   doc["temperatureC2"] = temperatureC2;  // Box temperature in Celsius
@@ -257,10 +259,17 @@ void loop() {
 
   //Se puede actualizar el codigo via Wifi al ESP32
 
-  char jsonBuffer[512];
+  char jsonBuffer[256];
   serializeJson(doc, jsonBuffer);  // Serialize the JSON document
-
   mqttClient.publish("esp32/sensorData", jsonBuffer);
  
+
+  Serial.print("MAC Address: ");
+  Serial.println(macAddress);
+  Serial.print("JSON: ");
+  Serial.println(jsonBuffer);
+  // Serial.print("CO2 Value: ");
+  // Serial.println(CO2);
+
   delay(2000);  // Delay for 2 seconds (must not be higher that 5 or OTA will not work)
 }
