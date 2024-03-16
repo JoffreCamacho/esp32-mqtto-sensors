@@ -36,6 +36,7 @@ bool mqttConnected = false;  // Variable to track MQTT connection status
 
 unsigned long lastAttemptTime = 0;           // Outside of any function
 const unsigned long attemptInterval = 5000;  // 5 seconds
+const unsigned long resetInterval = 300000; // 5 minutes = 300000 milliseconds
 
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);  // NewPing setup
 
@@ -181,8 +182,16 @@ void connectToMqtt() {
   }
 }
 
-
 void loop() {
+
+  unsigned long currentMillis = millis();
+
+  // Check if it's time to reset
+  if (currentMillis - lastResetTime >= resetInterval) {
+    Serial.println("5 minutes passed, resetting...");
+    ESP.restart(); // Resets the ESP32
+    lastResetTime = currentMillis; // Update the last reset time, though not strictly necessary as the device will restart
+  }
 
   if (!mqttConnected) {
     connectToMqtt();
@@ -269,7 +278,6 @@ void loop() {
   if (mqttConnected) {
     mqttClient.publish("esp32/sensorData", jsonBuffer);
   }
-
 
   //Serial.print("MAC Address: ");
   //Serial.println(macAddress);
