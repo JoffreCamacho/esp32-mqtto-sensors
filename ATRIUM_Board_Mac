@@ -34,6 +34,7 @@ bool relay2State = false;    // Variable to store the state of the second relay
 bool relay3State = false;    // Variable to store the state of the third relay
 bool mqttConnected = false;  // Variable to track MQTT connection status
 
+unsigned long lastResetTime = 0; // Stores the last reset time in milliseconds
 unsigned long lastAttemptTime = 0;           // Outside of any function
 const unsigned long attemptInterval = 5000;  // 5 seconds
 const unsigned long resetInterval = 300000; // 5 minutes = 300000 milliseconds
