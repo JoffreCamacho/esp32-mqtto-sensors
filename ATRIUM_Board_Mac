@@ -9,36 +9,58 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 #include <NewPing.h>
-#include <ESPAsyncWebSrv.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-//#include <driver/adc.h>
+#include "config.h"
 
+//#include <driver/adc.h>
 // 21 SCL 22 SDA [DER]
 // GPIO [23*,22*,1,3,21*,19,18*,5,17,16,4,0,2,15,8,7,6][DER]
 // GPIO [36*,39*,34*,35*,32*,33-,25-,26*,27-,14*,12,13,9,10,11][IZQ]
 // AVAILABLE [1,3,19,5,17,16,4,0,2,15,8,7,6,12,13,9,10,11]
 
-//#define OE_PIN 5                 // TXS0108E Enable
-#define ECHO_PIN 18              // HC-SR04 Define echo - 5v [DER] [SD3/GPIO10]
-#define TRIGGER_PIN 23           // HC-SR04 Define trigger - 3.3v [STB][DER][IO15/GPIO15]
-#define RELAY2_PIN 25            // Light Relay control - 3.3v [DER][IO0/GPIO0]
-//#define ONE_WIRE_BUS 26        // DS18B20 - 3.3v
-#define ONE_WIRE_BUS1 26         // DS18B20 Sensor 1 - 3.3v [CHECK][IZQ][IO4/GPIO4]
-#define ONE_WIRE_BUS2 14         // DS18B20 Sensor 2 - 3.3v (Choose an appropriate pin)[IZQ]
-#define RELAY_PIN 27             // Pump Relay control - 5v [IZQ*]
-#define TURBIDITY_SENSOR_PIN 13  // Turbidity sensor - 5v [STB] [ADC14][IZQ]
-#define RELAY3_PIN 33            // Heater Relay control - 5v[IZQ*]
-#define LIGHT_SENSOR_PIN 12      // LX1972 light sensor - 3.3v [STB][ADC15][IZQ]
-#define TDS_SENSOR_PIN 35        // TDS_Sensor - 3.3v [STB] [ADC7][IZQ]
-#define CO2_SENSOR_PIN 36        // MS1100 CO2 sensor - 5v [IZQ]
-#define PH_SENSOR_PIN 39         // PH-014 sensor - 5v [ADC3][IZQ]
-#define SEALEVELPRESSURE_HPA (1010.01)
-#define MAX_SENSOR_VALUE 4095  // max value for a 12-bit ADC
+// #define ECHO_PIN 18              // HC-SR04 Define echo - 5v [DER] [SD3/GPIO10]
+// #define TRIGGER_PIN 23           // HC-SR04 Define trigger - 3.3v [STB][DER][IO15/GPIO15]
+// #define RELAY2_PIN 25            // Light Relay control - 3.3v [DER][IO0/GPIO0]
+// #define ONE_WIRE_BUS1 26         // DS18B20 Sensor 1 - 3.3v [CHECK][IZQ][IO4/GPIO4]
+// #define ONE_WIRE_BUS2 14         // DS18B20 Sensor 2 - 3.3v (Choose an appropriate pin)[IZQ]
+// #define RELAY_PIN 27             // Pump Relay control - 5v [IZQ*]
+// #define TURBIDITY_SENSOR_PIN 13  // Turbidity sensor - 5v [STB] [ADC14][IZQ]
+// #define RELAY3_PIN 33            // Heater Relay control - 5v[IZQ*]
+// #define LIGHT_SENSOR_PIN 12      // LX1972 light sensor - 3.3v [STB][ADC15][IZQ]
+// #define TDS_SENSOR_PIN 35        // TDS_Sensor - 3.3v [STB] [ADC7][IZQ]
+// #define CO2_SENSOR_PIN 36        // MS1100 CO2 sensor - 5v [IZQ]
+// #define PH_SENSOR_PIN 39         // PH-014 sensor - 5v [ADC3][IZQ]
+// #define SEALEVELPRESSURE_HPA (1010.01)
+// #define MAX_SENSOR_VALUE 4095  // max value for a 12-bit ADC
+// #define MAX_RETRIES 5
 
-// Define the maximum and minimum distance for the tank
-#define MAX_DISTANCE 109.22 // Maximum distance from the sensor to the bottom of the tank (empty tank)
-#define MIN_TANK_DISTANCE 70.0   // Minimum distance from the sensor to the bottom of the tank (full tank)
+// // Define the maximum and minimum distance for the tank
+// #define MAX_DISTANCE 109.22     // Maximum distance from the sensor to the bottom of the tank (empty tank)
+// #define MIN_TANK_DISTANCE 70.0  // Minimum distance from the sensor to the bottom of the tank (full tank)
+
+// Using const instead
+const int ECHO_PIN = 18;
+const int TRIGGER_PIN = 23;
+
+// Similarly, for other constants
+const int RELAY2_PIN = 25;
+const int ONE_WIRE_BUS1 = 26;
+const int ONE_WIRE_BUS2 = 14;
+const int RELAY_PIN = 27;
+const int TURBIDITY_SENSOR_PIN = 13;
+const int RELAY3_PIN = 33;
+const int LIGHT_SENSOR_PIN = 12;
+const int TDS_SENSOR_PIN = 35;
+const int CO2_SENSOR_PIN = 36;
+const int PH_SENSOR_PIN = 39;
+const float SEALEVELPRESSURE_HPA = 1010.01;
+const int MAX_SENSOR_VALUE = 4095;
+const int MAX_RETRIES = 5;
+
+// For constants representing distances
+const float MAX_DISTANCE = 109.22;
+const float MIN_TANK_DISTANCE = 70.0;
 
 Adafruit_BME280 bme;  // I2C interface for BME280
 //OneWire oneWire(ONE_WIRE_BUS);
@@ -47,18 +69,13 @@ OneWire oneWire2(ONE_WIRE_BUS2);
 
 DallasTemperature sensors1(&oneWire1);
 DallasTemperature sensors2(&oneWire2);
-
-const char* ssid = "NETGEAR92";
-const char* password = "rockycream207";
-const char* mqttServer = "192.168.2.113";
-const int mqttPort = 1883;
-
 WiFiClient wClient;
 PubSubClient mqttClient(wClient);
 
-bool relayState = false;   // Variable to store the state of the relay
-bool relay2State = false;  // Variable to store the state of the second relay
-bool relay3State = false;  // Variable to store the state of the third relay
+bool relayState = false;     // Variable to store the state of the relay
+bool relay2State = false;    // Variable to store the state of the second relay
+bool relay3State = false;    // Variable to store the state of the third relay
+bool mqttConnected = false;  // Variable to track MQTT connection status
 
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);  // NewPing setup
 
@@ -67,15 +84,30 @@ void setup() {
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  //setupWebServer();  // Setup the web server
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("Connection Failed! Rebooting...");
+
+  // while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+  //   Serial.println("Connection Failed! Rebooting...");
+  //   delay(5000);
+  //   ESP.restart();
+  // }
+
+  // In the setup, improve WiFi connection logic with retries
+  int retries = 0;
+  while (WiFi.waitForConnectResult() != WL_CONNECTED && retries < MAX_RETRIES) {
+    Serial.println("Connection Failed! Retrying...");
     delay(5000);
+    WiFi.begin(ssid, password);
+    retries++;
+  }
+  if (retries >= MAX_RETRIES) {
+    Serial.println("Failed to connect to WiFi. Check configuration.");
     ESP.restart();
+    // Handle error (e.g., enter deep sleep, blink an LED, etc.)
   }
 
+
   ArduinoOTA
-  .onStart([]() {
+    .onStart([]() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH)
         type = "sketch";
@@ -112,7 +144,7 @@ void setup() {
   bme.begin(0x76);
   sensors1.begin();
   sensors2.begin();
-  
+
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(RELAY2_PIN, OUTPUT);
   pinMode(RELAY3_PIN, OUTPUT);
@@ -120,7 +152,7 @@ void setup() {
   // digitalWrite(RELAY_PIN, HIGH); // Ensure relay starts off
   // digitalWrite(RELAY2_PIN, HIGH); // Ensure relay starts off
   // digitalWrite(RELAY3_PIN, HIGH); // Ensure relay starts off
-  pinMode(LIGHT_SENSOR_PIN, INPUT); //this can create idm
+  pinMode(LIGHT_SENSOR_PIN, INPUT);  //this can create idm
   pinMode(CO2_SENSOR_PIN, INPUT);
   pinMode(PH_SENSOR_PIN, INPUT);
   // Set analog mode for the pins
@@ -179,12 +211,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 void connectToMqtt() {
   //Serial.println("Entered connectToMqtt");
   while (!mqttClient.connected()) {
-    //Serial.println("Connecting to MQTT server...");
+    Serial.println("Connecting to MQTT server...");
     if (mqttClient.connect("ESP32Client")) {
-      //Serial.print("Connected to MQTT server ");
+      Serial.print("Connected to MQTT server ");
       mqttClient.subscribe("esp32/relay1");
       mqttClient.subscribe("esp32/relay2");
       mqttClient.subscribe("esp32/relay3");
+      mqttConnected = true;  // Update connection status
     } else {
       Serial.print("Failed to connect to MQTT server, rc=");
       Serial.print(mqttClient.state());
@@ -196,20 +229,20 @@ void connectToMqtt() {
 
 void loop() {
 
-  if (!mqttClient.connected()) {
+  if (!mqttConnected) {
     connectToMqtt();
   }
   mqttClient.loop();
   ArduinoOTA.handle();
 
   // Read temperature
-  sensors1.requestTemperatures(); 
-  float temperatureC1 = sensors1.getTempCByIndex(0); // Temperature from sensor on ONE_WIRE_BUS1 WATER
-  
-  sensors2.requestTemperatures(); 
-  float temperatureC2 = sensors2.getTempCByIndex(0); // Temperature from sensor on ONE_WIRE_BUS2 BOX
+  sensors1.requestTemperatures();
+  float temperatureC1 = sensors1.getTempCByIndex(0);  // Temperature from sensor on ONE_WIRE_BUS1 WATER
 
-    // Initialize variables for BME280 data
+  sensors2.requestTemperatures();
+  float temperatureC2 = sensors2.getTempCByIndex(0);  // Temperature from sensor on ONE_WIRE_BUS2 BOX
+
+  // Initialize variables for BME280 data
   float bmeTemperature = -99.0;  // Default value if sensor is not detected
   float pressure = -99.0;        // Default value if sensor is not detected
   float humidity = -99.0;        // Default value if sensor is not detected
@@ -226,15 +259,15 @@ void loop() {
   int tdsValue = 0;
   int CO2 = 0;
   int phValue = 0;
-  
+
   // Take multiple samples and sum the readings
   for (int i = 0; i < numSamples; i++) {
-      lightIntensity += analogRead(LIGHT_SENSOR_PIN);
-      turbidity += analogRead(TURBIDITY_SENSOR_PIN);
-      tdsValue += analogRead(TDS_SENSOR_PIN);
-      CO2 += analogRead(CO2_SENSOR_PIN);
-      phValue += analogRead(PH_SENSOR_PIN);
-      delay(10);  // Delay between samples (adjust if necessary)
+    lightIntensity += analogRead(LIGHT_SENSOR_PIN);
+    turbidity += analogRead(TURBIDITY_SENSOR_PIN);
+    tdsValue += analogRead(TDS_SENSOR_PIN);
+    CO2 += analogRead(CO2_SENSOR_PIN);
+    phValue += analogRead(PH_SENSOR_PIN);
+    delay(10);  // Delay between samples (adjust if necessary)
   }
   // Read light intensity
   //int lightIntensity = analogRead(LIGHT_SENSOR_PIN);
@@ -258,9 +291,10 @@ void loop() {
   // Get ESP32 MAC address
   String macAddress = WiFi.macAddress();
   // Create JSON document
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<220> doc;
+  //DynamicJsonDocument doc(220);
   doc["macAddress"] = macAddress;
-  doc["temperatureC1"] = temperatureC1;    // Tank
+  doc["temperatureC1"] = temperatureC1;  // Tank
   doc["temperatureC2"] = temperatureC2;  // Box temperature in Celsius
   doc["bmeTemperature"] = bmeTemperature;
   doc["pressure"] = pressure;
@@ -271,19 +305,19 @@ void loop() {
   doc["CO2"] = CO2;
   doc["phValue"] = phValue;  // Include PH value in JSON
   doc["distance"] = distance;
-  doc["relayState"] = relayState;    // Include relay state in JSON
-  doc["relay2State"] = relay2State;  // Include second relay state in JSON
-  doc["relay3State"] = relay3State;  // Include third relay state in JSON
-
+  // doc["relayState"] = relayState;    // Include relay state in JSON
+  // doc["relay2State"] = relay2State;  // Include second relay state in JSON
+  //doc["relay3State"] = relay3State;  // Include third relay state in JSON
   //Se puede actualizar el codigo via Wifi al ESP32
-
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer);  // Serialize the JSON document
-  mqttClient.publish("esp32/sensorData", jsonBuffer);
- 
+  if (mqttConnected) {
+    mqttClient.publish("esp32/sensorData", jsonBuffer);
+  }
 
-  Serial.print("MAC Address: ");
-  Serial.println(macAddress);
+
+  //Serial.print("MAC Address: ");
+  //Serial.println(macAddress);
   Serial.print("JSON: ");
   Serial.println(jsonBuffer);
   // Serial.print("CO2 Value: ");
