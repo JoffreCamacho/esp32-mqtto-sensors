@@ -11,8 +11,9 @@
 #include <NewPing.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-#include "WiFiManager.h" // Include the WiFiManager
 #include "config.h"
+#include "WiFiManager.h" // Include the WiFiManager
+
 
 //#include <driver/adc.h>
 // 21 SCL 22 SDA [DER]
@@ -43,8 +44,17 @@ const unsigned long resetInterval = 300000; // 5 minutes = 300000 milliseconds
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);  // NewPing setup
 
 void setup() {
+
+    // List of all GPIO pins you intend to initialize
+  int gpioPins[] = {0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33}; // Only include valid output capable pins
+  int numPins = sizeof(gpioPins) / sizeof(gpioPins[0]); // Number of pins in the array
+
+  for(int i = 0; i < numPins; i++) {
+    pinMode(gpioPins[i], OUTPUT);
+    digitalWrite(gpioPins[i], LOW); // Set each pin to LOW
+  }
   
-  WiFiManager::connect(WIFI_SSID, WIFI_PASSWORD); // Use WiFiManager to connect
+  WiFiManager::connect(ssid, password); // Use WiFiManager to connect
 
   ArduinoOTA
     .onStart([]() {
@@ -88,6 +98,8 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(RELAY2_PIN, OUTPUT);
   pinMode(RELAY3_PIN, OUTPUT);
+  pinMode(ONE_WIRE_BUS1, INPUT);
+  pinMode(ONE_WIRE_BUS2, INPUT);
   analogReadResolution(12);
   // digitalWrite(RELAY_PIN, HIGH); // Ensure relay starts off
   // digitalWrite(RELAY2_PIN, HIGH); // Ensure relay starts off
@@ -97,7 +109,7 @@ void setup() {
   pinMode(PH_SENSOR_PIN, INPUT);
   // Set analog mode for the pins
   // analogSetPinAttenuation(TURBIDITY_SENSOR_PIN, ADC_11db); // For 3.3V max
-  // analogSetPinAttenuation(TDS_SENSOR_PIN, ADC_11db);
+  analogSetPinAttenuation(TDS_SENSOR_PIN, ADC_11db);
   // analogSetPinAttenuation(LIGHT_SENSOR_PIN, ADC_11db);
   // Set the pins for the sensors as inputs with pull-down resistors
   // pinMode(TURBIDITY_SENSOR_PIN, INPUT_PULLDOWN);
@@ -186,11 +198,13 @@ void loop() {
   ArduinoOTA.handle();
 
   // Read temperature
-  sensors1.requestTemperatures();
-  float temperatureC1 = sensors1.getTempCByIndex(0);  // Temperature from sensor on ONE_WIRE_BUS1 WATER
+  float temperatureC1 = analogRead(ONE_WIRE_BUS1);
+  // sensors1.requestTemperatures();
+  // float temperatureC1 = sensors1.getTempCByIndex(0);  // Temperature from sensor on ONE_WIRE_BUS1 WATER
+  float temperatureC2 = analogRead(ONE_WIRE_BUS2);
 
-  sensors2.requestTemperatures();
-  float temperatureC2 = sensors2.getTempCByIndex(0);  // Temperature from sensor on ONE_WIRE_BUS2 BOX
+  // sensors2.requestTemperatures();
+  // float temperatureC2 = sensors2.getTempCByIndex(0);  // Temperature from sensor on ONE_WIRE_BUS2 BOX
 
   // Initialize variables for BME280 data
   float bmeTemperature = -99.0;  // Default value if sensor is not detected
