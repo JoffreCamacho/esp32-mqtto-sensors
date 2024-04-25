@@ -114,13 +114,13 @@ void setup() {
   pinMode(LIGHT_SENSOR_PIN, INPUT);
 }
 
-uint32_t readADC_Calibrated(int pin) {
+uint32_t readADC_Calibrated(int gpioPin) {
+    adc1_channel_t channel = getADCChannel(gpioPin);
     uint32_t adc_reading = 0;
     for (int i = 0; i < NO_OF_SAMPLES; i++) {
-        adc_reading += adc1_get_raw((adc1_channel_t)pin);
+        adc_reading += adc1_get_raw(channel);
     }
     adc_reading /= NO_OF_SAMPLES;
-    // Convert adc_reading to voltage in mV
     uint32_t voltage = esp_adc_cal_raw_to_voltage(adc_reading, adc_chars);
     return voltage;
 }
@@ -188,6 +188,18 @@ void connectToMqtt() {
   }
 }
 
+adc1_channel_t getADCChannel(int gpioPin) {
+    switch(gpioPin) {
+        case 32: return ADC1_CHANNEL_4; 
+        case 33: return ADC1_CHANNEL_5; 
+        case 34: return ADC1_CHANNEL_6;
+        case 35: return ADC1_CHANNEL_7;
+        case 36: return ADC1_CHANNEL_0;
+        case 39: return ADC1_CHANNEL_3;
+        default: return ADC1_CHANNEL_0; // Default case if not found
+    }
+}
+
 void loop() {
 
   unsigned long currentMillis = millis();
@@ -232,25 +244,6 @@ void loop() {
   int CO2 = 0;
   int phValue = 0;
 
-  // uint32_t tdsVoltage = readADC_Calibrated(TDS_SENSOR_PIN);
-
-  // Take multiple samples and sum the readings using calibrated ADC values
-  for (int i = 0; i < numSamples; i++) {
-    lightIntensity += readADC_Calibrated(LIGHT_SENSOR_PIN);
-    turbidity += readADC_Calibrated(TURBIDITY_SENSOR_PIN);
-    tdsValue += readADC_Calibrated(TDS_SENSOR_PIN);
-    CO2 += readADC_Calibrated(CO2_SENSOR_PIN);
-    phValue += readADC_Calibrated(PH_SENSOR_PIN);
-    //delay(10);  // Delay between samples (adjust if necessary)
-  }
-
-  // Average the readings by dividing by the number of samples
-  lightIntensity /= numSamples;
-  turbidity /= numSamples;
-  tdsValue /= numSamples;
-  CO2 /= numSamples;
-  phValue /= numSamples;
-
   // Calculate the average by dividing the sum by the number of samples
   lightIntensity = readADC_Calibrated(LIGHT_SENSOR_PIN);
   turbidity = readADC_Calibrated(TURBIDITY_SENSOR_PIN);
@@ -258,11 +251,6 @@ void loop() {
   CO2 = readADC_Calibrated(CO2_SENSOR_PIN);
   phValue = readADC_Calibrated(PH_SENSOR_PIN);
 
-  lightIntensity /= numSamples;
-  turbidity /= numSamples;
-  tdsValue /= numSamples;
-  CO2 /= numSamples;
-  phValue /= numSamples;
   unsigned int uS = sonar.ping();
   float distance = uS / US_ROUNDTRIP_CM;  // Convert ping time to distance in cm
   // Get ESP32 MAC address
