@@ -245,8 +245,9 @@ void loop() {
   int phValue = 0;
 
   // Calculate the average by dividing the sum by the number of samples
-  lightIntensity = readADC_Calibrated(LIGHT_SENSOR_PIN);
-  turbidity = readADC_Calibrated(TURBIDITY_SENSOR_PIN);
+  //lightIntensity = readADC_Calibrated(LIGHT_SENSOR_PIN);
+  lightIntensity = analogRead(LIGHT_SENSOR_PIN);
+  //turbidity = readADC_Calibrated(TURBIDITY_SENSOR_PIN);
   tdsValue = readADC_Calibrated(TDS_SENSOR_PIN);
   CO2 = readADC_Calibrated(CO2_SENSOR_PIN);
   phValue = readADC_Calibrated(PH_SENSOR_PIN);
