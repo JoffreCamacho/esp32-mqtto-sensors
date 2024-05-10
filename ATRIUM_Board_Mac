@@ -244,13 +244,26 @@ void loop() {
   int CO2 = 0;
   int phValue = 0;
 
+  // Take multiple samples and sum the readings
+  for (int i = 0; i < numSamples; i++) {
+  lightIntensity += analogRead(LIGHT_SENSOR_PIN);
+  //turbidity += analogRead(TURBIDITY_SENSOR_PIN);
+  //tdsValue += analogRead(TDS_SENSOR_PIN);
+  //CO2 += analogRead(CO2_SENSOR_PIN);
+  //phValue += analogRead(PH_SENSOR_PIN);
+  }
   // Calculate the average by dividing the sum by the number of samples
+  lightIntensity /= numSamples;
+  // turbidity /= numSamples;
+  // tdsValue /= numSamples;
+  // CO2 /= numSamples;
+  // phValue /= numSamples;
   //lightIntensity = readADC_Calibrated(LIGHT_SENSOR_PIN);
-  lightIntensity = analogRead(LIGHT_SENSOR_PIN);
+  //lightIntensity = analogRead(LIGHT_SENSOR_PIN);
   //turbidity = readADC_Calibrated(TURBIDITY_SENSOR_PIN);
-  tdsValue = readADC_Calibrated(TDS_SENSOR_PIN);
-  CO2 = readADC_Calibrated(CO2_SENSOR_PIN);
-  phValue = readADC_Calibrated(PH_SENSOR_PIN);
+  //tdsValue = readADC_Calibrated(TDS_SENSOR_PIN);
+  //CO2 = readADC_Calibrated(CO2_SENSOR_PIN);
+  //phValue = readADC_Calibrated(PH_SENSOR_PIN);
 
   unsigned int uS = sonar.ping();
   float distance = uS / US_ROUNDTRIP_CM;  // Convert ping time to distance in cm
