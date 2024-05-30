@@ -12,26 +12,19 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include "config.h"
-#include "WiFiManager.h" // Include the WiFiManager
+#include "WiFiManager.h" 
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
 #include <SoftwareSerial.h>
-
-// 21 SCL 22 SDA [DER]
-// GPIO [23*,22*,1,3,21*,19,18*,5,17,16,4,0,2,15,8,7,6][DER]
-// GPIO [36*,39*,34*,35*,32*,33-,25-,26*,27-,14*,12,13,9,10,11][IZQ]
-// AVAILABLE [19,5,17,16,4,0,2,15,8,7,6,12,13,9,10,11]
+//#include <Wire.h> 
 
 Adafruit_BME280 bme;  // I2C interface for BME280
-//OneWire oneWire(ONE_WIRE_BUS);
 OneWire oneWire1(ONE_WIRE_BUS1);
 OneWire oneWire2(ONE_WIRE_BUS2);
 DallasTemperature sensors1(&oneWire1);
 DallasTemperature sensors2(&oneWire2);
 
-// Initialize the software serial for CO2 sensor
 SoftwareSerial co2Serial(CO2_RX_PIN, CO2_TX_PIN);
-
 WiFiClient wClient;
 PubSubClient mqttClient(wClient);
 
@@ -39,36 +32,39 @@ bool relayState = false;     // Variable to store the state of the relay
 bool relay2State = false;    // Variable to store the state of the second relay
 bool relay3State = false;    // Variable to store the state of the third relay
 bool mqttConnected = false;  // Variable to track MQTT connection status
-float temperatureC1;
-float temperatureC2;
+bool isBME280Initialized = false;
 
-unsigned long lastResetTime = 0; // Stores the last reset time in milliseconds
-unsigned long lastAttemptTime = 0;           // Outside of any function
+
+uint32_t lastResetTime = 0; // Stores the last reset time in milliseconds
+uint32_t lastAttemptTime = 0; // Outside of any function
+         
 const unsigned long attemptInterval = 5000;  // 5 seconds
-//const unsigned long resetInterval = 180000; // 3 minutes = 180000 milliseconds
-//const unsigned long resetInterval = 300000; // 5 minutes = 300000 milliseconds
 const unsigned long resetInterval = 600000; // 10 minutes = 600000 milliseconds
 
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);  // NewPing setup
 
-void setup() {
-
-  co2Serial.begin(9600); // Initialize Serial2 for MH-Z19B
-
-  // List of all GPIO pins you intend to initialize
-  int gpioPins[] = {0, 1, 2, 3, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33}; // Only include valid output capable pins
-  int numPins = sizeof(gpioPins) / sizeof(gpioPins[0]); // Number of pins in the array
-  
-  adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
-  esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, DEFAULT_VREF, adc_chars);
+void initializePins() { // List of all GPIO pins you intend to initialize
+  int gpioPins[] = {5, 12, 13, 14, 15, 16, 17, 18, 19, 25, 26, 27, 32, 33}; 
+  int numPins = sizeof(gpioPins) / sizeof(gpioPins[0]); 
   
   for(int i = 0; i < numPins; i++) {
     pinMode(gpioPins[i], OUTPUT);
-    digitalWrite(gpioPins[i], LOW); // Set each pin to LOW
+    digitalWrite(gpioPins[i], LOW); 
   }
-
-  WiFiManager::connect(ssid, password); // Use WiFiManager to connect
-
+  digitalWrite(RELAY_PIN, HIGH); // Ensure relay starts off
+  digitalWrite(RELAY2_PIN, HIGH); // Ensure relay starts off
+  digitalWrite(RELAY3_PIN, HIGH); // Ensure relay starts off
+  pinMode(CO2_SENSOR_PIN, INPUT);
+  pinMode(PH_SENSOR_PIN, INPUT);
+  pinMode(TURBIDITY_SENSOR_PIN, INPUT);
+  pinMode(TDS_SENSOR_PIN, INPUT);
+  pinMode(LIGHT_SENSOR_PIN, INPUT);
+}
+void setupWiFi() {
+  Serial.println("Connecting to WiFi...");
+  WiFiManager::connect(ssid, password); 
+}
+void setupOTA() {
   ArduinoOTA
     .onStart([]() {
       String type;
@@ -76,7 +72,7 @@ void setup() {
         type = "sketch";
       else
         type = "filesystem";
-      Serial.println("Start updating: ");
+      Serial.println("Start updating: " + type);
     })
     .onEnd([]() {
       Serial.println("\nEnd");
@@ -94,34 +90,40 @@ void setup() {
     });
 
   ArduinoOTA.begin();
-
-  Serial.println("Ready");
-  Serial.print("IP address: ");
-  IPAddress ip = WiFi.localIP();
-  String ipString = ip.toString();
-
+}
+void setupMQTT() {
   mqttClient.setServer(mqttServer, mqttPort);
   mqttClient.setCallback(mqttCallback);
+}
+void initializeI2C() {
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN); // Initialize I2C with specified pins
+  isBME280Initialized = bme.begin(0x76, &Wire); // Try to initialize the sensor
 
-    analogReadResolution(12);
-  
-   // Initialize ADC calibration characteristics
-  adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
-  
-  bme.begin(0x76);
+  if (!isBME280Initialized) {
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+  } else {
+    Serial.println("BME280 sensor initialized successfully!");
+  }
+}
+void setupSensors() {
+  co2Serial.begin(9600); 
   sensors1.begin();
   sensors2.begin();
-  digitalWrite(RELAY_PIN, HIGH); // Ensure relay starts off
-  digitalWrite(RELAY2_PIN, HIGH); // Ensure relay starts off
-  digitalWrite(RELAY3_PIN, HIGH); // Ensure relay starts off
-  // pinMode(LIGHT_SENSOR_PIN, INPUT);  //this can create idm
-  pinMode(CO2_SENSOR_PIN, INPUT);
-  pinMode(PH_SENSOR_PIN, INPUT);
-  pinMode(TURBIDITY_SENSOR_PIN, INPUT);
-  pinMode(TDS_SENSOR_PIN, INPUT);
-  pinMode(LIGHT_SENSOR_PIN, INPUT);
 }
+void setup() {
+  Serial.begin(115200);
+  initializePins();  
+  Serial.println("Pins asignados");
+  setupWiFi();
+  setupOTA();
+  setupMQTT();
+  setupSensors();
+  initializeI2C();
 
+  Serial.println("Ready");
+  analogReadResolution(12);
+
+}
 int readCO2() {
   byte response[9];  // Buffer to store response from the sensor
   co2Serial.write((byte)0xFF);  // Send command to read CO2
@@ -141,19 +143,6 @@ int readCO2() {
   int ppm = (256 * (int)response[2]) + (int)response[3];
   return ppm;
 }
-
-
-uint32_t readADC_Calibrated(int gpioPin) {
-    adc1_channel_t channel = getADCChannel(gpioPin);
-    uint32_t adc_reading = 0;
-    for (int i = 0; i < NO_OF_SAMPLES; i++) {
-        adc_reading += adc1_get_raw(channel);
-    }
-    adc_reading /= NO_OF_SAMPLES;
-    uint32_t voltage = esp_adc_cal_raw_to_voltage(adc_reading, adc_chars);
-    return voltage;
-}
-
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println("Entered mqttCallback");
   String message = "";
@@ -196,7 +185,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
   }
 }
-
 void connectToMqtt() {
   if (!mqttClient.connected()) {
     unsigned long currentMillis = millis();
@@ -216,19 +204,56 @@ void connectToMqtt() {
     }
   }
 }
+void readAndPublishSensorData() {
+  sensors1.requestTemperatures();
+  float temperatureC1 = sensors1.getTempCByIndex(0);  
+  sensors2.requestTemperatures();
+  float temperatureC2 = sensors2.getTempCByIndex(0);  
 
-adc1_channel_t getADCChannel(int gpioPin) {
-    switch(gpioPin) {
-        case 32: return ADC1_CHANNEL_4; 
-        case 33: return ADC1_CHANNEL_5; 
-        case 34: return ADC1_CHANNEL_6;
-        case 35: return ADC1_CHANNEL_7;
-        case 36: return ADC1_CHANNEL_0;
-        case 39: return ADC1_CHANNEL_3;
-        default: return ADC1_CHANNEL_0; // Default case if not found
-    }
+  // Initialize variables for BME280 data
+  float bmeTemperature = -99.0;  // Default value if sensor is not detected
+  float pressure = -99.0;        // Default value if sensor is not detected
+  float humidity = -99.0;        // Default value if sensor is not detected
+
+  bmeTemperature = bme.readTemperature();
+  pressure = bme.readPressure();
+  humidity = bme.readHumidity();
+
+  const int numSamples = 10; 
+  int lightIntensity = 0;
+  int turbidity = 0;
+  int tdsValue = 0;
+  int CO2 = readCO2();
+  int phValue = 0;
+
+  for (int i = 0; i < numSamples; i++) {
+    lightIntensity += analogRead(LIGHT_SENSOR_PIN);
+  }
+  lightIntensity /= numSamples;
+
+  unsigned int uS = sonar.ping();
+  float distance = uS / US_ROUNDTRIP_CM;  
+
+  String macAddress = WiFi.macAddress();
+  StaticJsonDocument<220> doc;
+  doc["macAddress"] = macAddress;
+  doc["temperatureC1"] = temperatureC1;  
+  doc["temperatureC2"] = temperatureC2;  
+  doc["bmeTemperature"] = bmeTemperature;
+  doc["pressure"] = pressure;
+  doc["humidity"] = humidity;
+  doc["lightIntensity"] = lightIntensity;
+  doc["turbidity"] = turbidity;
+  doc["tds"] = tdsValue;
+  doc["CO2"] = CO2;
+  doc["phValue"] = phValue;  
+  doc["distance"] = distance;
+  char jsonBuffer[512];
+  serializeJson(doc, jsonBuffer);  
+  if (mqttConnected) {
+    mqttClient.publish("esp32/sensorData", jsonBuffer);
+  }
 }
-
 void loop() {
 
   unsigned long currentMillis = millis();
@@ -240,87 +265,20 @@ void loop() {
     lastResetTime = currentMillis; // Update the last reset time, though not strictly necessary as the device will restart
   }
 
+  // Check if it's time to recheck the BME280 sensor
+  static unsigned long lastSensorCheckTime = 0;
+  if (currentMillis - lastSensorCheckTime >= 60000) { // Check every 60 seconds
+    initializeI2C();
+    lastSensorCheckTime = currentMillis;
+  }
+
   if (!mqttConnected) {
     connectToMqtt();
   }
   mqttClient.loop();
   ArduinoOTA.handle();
 
-  // Read temperature
-  sensors1.requestTemperatures();
-  temperatureC1 = sensors1.getTempCByIndex(0);  // Temperature from sensor on ONE_WIRE_BUS1 BOX
-  // temperatureC1 = analogRead(ONE_WIRE_BUS1);
-
-  sensors2.requestTemperatures();
-  temperatureC2 = sensors2.getTempCByIndex(0);  // Temperature from sensor on ONE_WIRE_BUS2 WATER
-  // temperatureC2 = analogRead(ONE_WIRE_BUS2);
-
-  // Initialize variables for BME280 data
-  float bmeTemperature = -99.0;  // Default value if sensor is not detected
-  float pressure = -99.0;        // Default value if sensor is not detected
-  float humidity = -99.0;        // Default value if sensor is not detected
-
-  // Do not reinitialize; just read from the sensor
-  bmeTemperature = bme.readTemperature();
-  pressure = bme.readPressure();
-  humidity = bme.readHumidity();
-
-  // Multisampling for analog sensors
-  const int numSamples = 10;  // Number of samples to take
-  int lightIntensity = 0;
-  int turbidity = 0;
-  int tdsValue = 0;
-  //int CO2 = 0;
-  // Read CO2 concentration
-  int CO2 = readCO2();
-  int phValue = 0;
-
-  // Take multiple samples and sum the readings
-  for (int i = 0; i < numSamples; i++) {
-  lightIntensity += analogRead(LIGHT_SENSOR_PIN);
-  //turbidity += analogRead(TURBIDITY_SENSOR_PIN);
-  //tdsValue += analogRead(TDS_SENSOR_PIN);
-  //CO2 += analogRead(CO2_SENSOR_PIN);
-  //phValue += analogRead(PH_SENSOR_PIN);
-  }
-  // Calculate the average by dividing the sum by the number of samples
-  lightIntensity /= numSamples;
-  // turbidity /= numSamples;
-  // tdsValue /= numSamples;
-  // CO2 /= numSamples;
-  // phValue /= numSamples;
-  //lightIntensity = readADC_Calibrated(LIGHT_SENSOR_PIN);
-  //lightIntensity = analogRead(LIGHT_SENSOR_PIN);
-  //turbidity = readADC_Calibrated(TURBIDITY_SENSOR_PIN);
-  //tdsValue = readADC_Calibrated(TDS_SENSOR_PIN);
-  //CO2 = readADC_Calibrated(CO2_SENSOR_PIN);
-  //phValue = readADC_Calibrated(PH_SENSOR_PIN);
-
-  unsigned int uS = sonar.ping();
-  float distance = uS / US_ROUNDTRIP_CM;  // Convert ping time to distance in cm
-  // Get ESP32 MAC address
-  String macAddress = WiFi.macAddress();
-  // Create JSON document
-  StaticJsonDocument<220> doc;
-  //DynamicJsonDocument doc(220);
-  doc["macAddress"] = macAddress;
-  doc["temperatureC1"] = temperatureC1;  // BOX
-  doc["temperatureC2"] = temperatureC2;  // TANK temperature in Celsius
-  doc["bmeTemperature"] = bmeTemperature;
-  doc["pressure"] = pressure;
-  doc["humidity"] = humidity;
-  doc["lightIntensity"] = lightIntensity;
-  doc["turbidity"] = turbidity;
-  doc["tds"] = tdsValue;
-  doc["CO2"] = CO2;
-  doc["phValue"] = phValue;  // Include PH value in JSON
-  doc["distance"] = distance;
-  char jsonBuffer[512];
-  serializeJson(doc, jsonBuffer);  // Serialize the JSON document
-  if (mqttConnected) {
-    mqttClient.publish("esp32/sensorData", jsonBuffer);
-  }
-
+  readAndPublishSensorData();
 
   delay(2000);  // Delay for 2 seconds (must not be higher that 5 or OTA will not work)
 }
