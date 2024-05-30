@@ -16,21 +16,17 @@ const char* password = "YOURPASSWORD";
 const char* mqttServer = "YOURMQTTO_IP";
 const int mqttPort = YOURMQTOPORT;
 
-// Using const instead
-const int ECHO_PIN = 18;
-const int TRIGGER_PIN = 23;
-
-// Similarly, for other constants
-// Can not be used with wifi [25,26,27,14,12,13,4,2,15]
-// Only input pins [34-39]
-// Available ADC1 pins [36,39,34,35,32,33]
-
 const int CO2_TX_PIN = 1;  // TX pin for MH-Z19B
 const int CO2_RX_PIN = 3;  // RX pin for MH-Z19B
+const int RELAY2_PIN = 5;
 const int ONE_WIRE_BUS1 = 16; 
 const int ONE_WIRE_BUS2 = 17;
+const int ECHO_PIN = 18;
 const int RELAY_PIN = 19;
-const int RELAY2_PIN = 22;
+// Define I2C pins for BME280
+const int I2C_SDA_PIN = 21;
+const int I2C_SCL_PIN = 22;
+const int TRIGGER_PIN = 23;
 const int TURBIDITY_SENSOR_PIN = 32;          //ADC1_CHANNEL_4
 const int RELAY3_PIN = 33;                    //ADC1_CHANNEL_5
 const int LIGHT_SENSOR_PIN = 34; //input only //ADC1_CHANNEL_6
