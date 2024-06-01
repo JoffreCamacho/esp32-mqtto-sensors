@@ -16,7 +16,9 @@
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
 #include <SoftwareSerial.h>
-//#include <Wire.h> 
+#include <Wire.h> 
+#include <ESPAsyncWebServer.h> //added
+
 
 Adafruit_BME280 bme;  // I2C interface for BME280
 OneWire oneWire1(ONE_WIRE_BUS1);
@@ -28,12 +30,15 @@ SoftwareSerial co2Serial(CO2_RX_PIN, CO2_TX_PIN);
 WiFiClient wClient;
 PubSubClient mqttClient(wClient);
 
+
 bool relayState = false;     // Variable to store the state of the relay
 bool relay2State = false;    // Variable to store the state of the second relay
 bool relay3State = false;    // Variable to store the state of the third relay
 bool mqttConnected = false;  // Variable to track MQTT connection status
 bool isBME280Initialized = false;
 
+// Define a unique identifier, e.g., MAC address
+String uniqueID;
 
 uint32_t lastResetTime = 0; // Stores the last reset time in milliseconds
 uint32_t lastAttemptTime = 0; // Outside of any function
@@ -42,6 +47,95 @@ const unsigned long attemptInterval = 5000;  // 5 seconds
 const unsigned long resetInterval = 600000; // 10 minutes = 600000 milliseconds
 
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);  // NewPing setup
+
+AsyncWebServer server(80); //added..
+String logBuffer = "";
+
+void myPrint(const String &message) {
+  logBuffer += message;
+  if (logBuffer.length() > 2048) {
+    logBuffer.remove(0, logBuffer.length() - 2048); // Keep buffer size within limits
+  }
+}
+
+class mySerialClass {
+public:
+  void begin(int baudRate) {
+    Serial.begin(baudRate);
+  }
+  
+  void print(const String &message) {
+    myPrint(message);
+    Serial.print(message);
+  }
+
+  void println(const String &message) {
+    myPrint(message + "\n");
+    Serial.println(message);
+  }
+
+  void printf(const char *format, ...) {
+    char buf[256];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buf, sizeof(buf), format, args);
+    va_end(args);
+    myPrint(buf);
+    Serial.print(buf);
+  }
+};
+#define Serial mySerial
+
+mySerialClass mySerial;
+
+String scanI2C() { // Function to scan I2C devices
+  String result = "";
+  byte error, address;
+  int nDevices;
+
+  result += "Scanning I2C bus...\n";
+
+  nDevices = 0;
+  for (address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+
+    if (error == 0) {
+      result += "I2C device found at address 0x";
+      if (address < 16) {
+        result += "0";
+      }
+      result += String(address, HEX);
+      result += "\n";
+
+      nDevices++;
+    } else if (error == 4) {
+      result += "Unknown error at address 0x";
+      if (address < 16) {
+        result += "0";
+      }
+      result += String(address, HEX);
+      result += "\n";
+    }
+  }
+  if (nDevices == 0) {
+    result += "No I2C devices found\n";
+  } else {
+    result += "done\n";
+  }
+
+  return result;
+}
+
+void setupI2CScannerWebServer() { // Function to set up the web server
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    String response = logBuffer;
+    request->send(200, "text/plain", response);
+  });
+
+  server.begin();
+  mySerial.println("Web server started");
+}
 
 void initializePins() { // List of all GPIO pins you intend to initialize
   int gpioPins[] = {5, 12, 13, 14, 15, 16, 17, 18, 19, 25, 26, 27, 32, 33}; 
@@ -60,10 +154,13 @@ void initializePins() { // List of all GPIO pins you intend to initialize
   pinMode(TDS_SENSOR_PIN, INPUT);
   pinMode(LIGHT_SENSOR_PIN, INPUT);
 }
+
 void setupWiFi() {
-  Serial.println("Connecting to WiFi...");
-  WiFiManager::connect(ssid, password); 
+  mySerial.println("Connecting to WiFi...");
+  WiFiManager::connect(ssid, password);  
+  uniqueID = WiFi.macAddress();  // Initialize unique identifier after WiFi connection 
 }
+
 void setupOTA() {
   ArduinoOTA
     .onStart([]() {
@@ -72,58 +169,90 @@ void setupOTA() {
         type = "sketch";
       else
         type = "filesystem";
-      Serial.println("Start updating: " + type);
+      mySerial.println("Start updating: " + type);
     })
     .onEnd([]() {
-      Serial.println("\nEnd");
+      mySerial.println("\nEnd");
     })
     .onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      mySerial.printf("Progress: %u%%\r", (progress / (total / 100)));
     })
     .onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+      mySerial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) mySerial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) mySerial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) mySerial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) mySerial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) mySerial.println("End Failed");
     });
 
   ArduinoOTA.begin();
 }
+
 void setupMQTT() {
   mqttClient.setServer(mqttServer, mqttPort);
   mqttClient.setCallback(mqttCallback);
 }
+
 void initializeI2C() {
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN); // Initialize I2C with specified pins
-  isBME280Initialized = bme.begin(0x76, &Wire); // Try to initialize the sensor
+  // Set SDA and SCL pins to use internal pull-up resistors
+  pinMode(I2C_SDA_PIN, INPUT_PULLUP);
+  pinMode(I2C_SCL_PIN, INPUT_PULLUP);
+
+  // Initialize I2C with specified pins
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+
+  for (int i = 0; i < 3; i++) { // Retry up to 3 times
+    if (bme.begin(0x76, &Wire)) { // Try address 0x76
+      mySerial.println("BME280/BMP280 sensor initialized successfully at address 0x76!");
+      mySerial.println("Sensor Address: 0x76");
+      delay(100); // Allow sensor to stabilize
+      isBME280Initialized = true;
+      break;
+    } else if (bme.begin(0x77, &Wire)) { // Try address 0x77
+      mySerial.println("BME280/BMP280 sensor initialized successfully at address 0x77!");
+      mySerial.println("Sensor Address: 0x77");
+      delay(100); // Allow sensor to stabilize
+      isBME280Initialized = true;
+      break;
+    } else {
+      mySerial.println("Could not find a valid BME280/BMP280 sensor, retrying...");
+      delay(1000); // Wait 1 second before retrying
+    }
+  }
 
   if (!isBME280Initialized) {
-    Serial.println("Could not find a valid BME280 sensor, check wiring!");
-  } else {
-    Serial.println("BME280 sensor initialized successfully!");
+    mySerial.println("BME280/BMP280 sensor initialization failed!");
   }
 }
+
 void setupSensors() {
-  co2Serial.begin(9600); 
+
   sensors1.begin();
   sensors2.begin();
 }
+
+void checkHeap() {
+  mySerial.printf("Free heap: %d\n", ESP.getFreeHeap());
+}
+
 void setup() {
-  Serial.begin(115200);
+  mySerial.begin(115200);
+  co2Serial.begin(9600); 
   initializePins();  
-  Serial.println("Pins asignados");
+  mySerial.println("Pins asignados");
   setupWiFi();
   setupOTA();
   setupMQTT();
-  setupSensors();
   initializeI2C();
+  setupI2CScannerWebServer();
+  setupSensors();
 
-  Serial.println("Ready");
+  mySerial.println("Ready");
   analogReadResolution(12);
 
 }
+
 int readCO2() {
   byte response[9];  // Buffer to store response from the sensor
   co2Serial.write((byte)0xFF);  // Send command to read CO2
@@ -136,94 +265,128 @@ int readCO2() {
   co2Serial.write((byte)0x00);
   co2Serial.write((byte)0x79);
   
+  delay(10); // Wait for the sensor to respond
+  
   for (int i = 0; i < 9; i++) {
-    response[i] = co2Serial.read();
+    if (co2Serial.available()) {
+      response[i] = co2Serial.read();
+    } else {
+      response[i] = 0;  // Default value if no data is available
+    }
   }
   
+  // Check for a valid response
+  if (response[0] != 0xFF || response[1] != 0x86) {
+    return -1;  // Invalid response
+  }
+
   int ppm = (256 * (int)response[2]) + (int)response[3];
   return ppm;
 }
+
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.println("Entered mqttCallback");
+  mySerial.println("Entered mqttCallback");
   String message = "";
   for (int i = 0; i < length; i++) {
     message += (char)payload[i];
   }
 
-  Serial.println("Message: " + message);
+  mySerial.println("Message: " + message);
 
-  // Depending on the topic, control the corresponding relay
-  if (String(topic) == "esp32/relay1") {
+  // Example for handling device-specific topics
+  String topicString = String(topic);
+  if (topicString.endsWith("relay1")) {
     if (message == "on") {
       digitalWrite(RELAY_PIN, LOW);
       relayState = true;
-      Serial.println("Relay 1 turned on");
+      mySerial.println("Relay 1 turned on");
     } else if (message == "off") {
       digitalWrite(RELAY_PIN, HIGH);
       relayState = false;
-      Serial.println("Relay 1 turned off");
+      mySerial.println("Relay 1 turned off");
     }
-  } else if (String(topic) == "esp32/relay2") {
+  } else if (topicString.endsWith("relay2")) {
     if (message == "on") {
       digitalWrite(RELAY2_PIN, LOW);
       relay2State = true;
-      Serial.println("Relay 2 turned on");
+      mySerial.println("Relay 2 turned on");
     } else if (message == "off") {
       digitalWrite(RELAY2_PIN, HIGH);
       relay2State = false;
-      Serial.println("Relay 2 turned off");
+      mySerial.println("Relay 2 turned off");
     }
-  } else if (String(topic) == "esp32/relay3") {
+  } else if (topicString.endsWith("relay3")) {
     if (message == "on") {
       digitalWrite(RELAY3_PIN, LOW);
       relay3State = true;
-      Serial.println("Relay 3 turned on");
+      mySerial.println("Relay 3 turned on");
     } else if (message == "off") {
       digitalWrite(RELAY3_PIN, HIGH);
       relay3State = false;
-      Serial.println("Relay 3 turned off");
+      mySerial.println("Relay 3 turned off");
     }
   }
 }
+
 void connectToMqtt() {
   if (!mqttClient.connected()) {
     unsigned long currentMillis = millis();
     if (currentMillis - lastAttemptTime >= attemptInterval) {
-      Serial.println("Connecting to MQTT server...");
+      mySerial.println("Connecting to MQTT server...");
       if (mqttClient.connect("ESP32Client")) {
-        Serial.println("Connected to MQTT server");
-        mqttClient.subscribe("esp32/relay1");
-        mqttClient.subscribe("esp32/relay2");
-        mqttClient.subscribe("esp32/relay3");
+        mySerial.println("Connected to MQTT server");
+        mqttClient.subscribe(("esp32/" + String(uniqueID) + "/relay1").c_str());
+        mqttClient.subscribe(("esp32/" + String(uniqueID) + "/relay2").c_str());
+        mqttClient.subscribe(("esp32/" + String(uniqueID) + "/relay3").c_str());
         mqttConnected = true; // Update connection status
       } else {
-        Serial.print("Failed to connect to MQTT server, rc=");
-        Serial.println(mqttClient.state());
+        mySerial.print("Failed to connect to MQTT server, rc=");
+        mySerial.println(String(mqttClient.state())); // Convert int to String
         lastAttemptTime = currentMillis; // Update the last attempt time
       }
     }
   }
 }
+
 void readAndPublishSensorData() {
   sensors1.requestTemperatures();
   float temperatureC1 = sensors1.getTempCByIndex(0);  
   sensors2.requestTemperatures();
   float temperatureC2 = sensors2.getTempCByIndex(0);  
 
-  // Initialize variables for BME280 data
-  float bmeTemperature = -99.0;  // Default value if sensor is not detected
-  float pressure = -99.0;        // Default value if sensor is not detected
-  float humidity = -99.0;        // Default value if sensor is not detected
+  float bmeTemperature = NAN;
+  float pressure = NAN;
+  float humidity = NAN;
+  
+  // Read BME280 sensor values only if initialized successfully
+  if (isBME280Initialized) {
+    bmeTemperature = bme.readTemperature();
+    pressure = bme.readPressure();
+    humidity = bme.readHumidity();
 
-  bmeTemperature = bme.readTemperature();
-  pressure = bme.readPressure();
-  humidity = bme.readHumidity();
+    // Check for invalid values and set to a specific invalid value (like -999) if needed
+    if (isnan(bmeTemperature)) bmeTemperature = -999;
+    if (isnan(pressure)) pressure = -999;
+    if (isnan(humidity)) humidity = -999;
+  } else {
+    mySerial.println("BME280 not initialized, skipping sensor read.");
+  }
+    // Validate sensor readings
+  if (isnan(bmeTemperature) || isnan(pressure) || isnan(humidity)) {
+    mySerial.println("Invalid BME280 readings, skipping publish...");
+    return;
+  }
 
   const int numSamples = 10; 
   int lightIntensity = 0;
   int turbidity = 0;
   int tdsValue = 0;
   int CO2 = readCO2();
+  if (CO2 < 0 || CO2 > 10000) {  // Example range, adjust as necessary
+    Serial.println("Invalid CO2 reading");
+    CO2 = 0;  // Set to a default or error value
+  }
+
   int phValue = 0;
 
   for (int i = 0; i < numSamples; i++) {
@@ -235,7 +398,7 @@ void readAndPublishSensorData() {
   float distance = uS / US_ROUNDTRIP_CM;  
 
   String macAddress = WiFi.macAddress();
-  StaticJsonDocument<220> doc;
+  StaticJsonDocument<512> doc;
   doc["macAddress"] = macAddress;
   doc["temperatureC1"] = temperatureC1;  
   doc["temperatureC2"] = temperatureC2;  
@@ -250,17 +413,31 @@ void readAndPublishSensorData() {
   doc["distance"] = distance;
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer);  
+  
+  // Print JSON data to mySerial
+  mySerial.println("JSON data:");
+  mySerial.println(jsonBuffer);
+
+  // Publish to unique topic
+  String topic = "esp32/" + uniqueID + "/sensorData";
   if (mqttConnected) {
-    mqttClient.publish("esp32/sensorData", jsonBuffer);
+    bool success = mqttClient.publish(topic.c_str(), jsonBuffer);
+    if (success) {
+      mySerial.println("Json sent successfully.");
+    } else {
+      mySerial.println("Failed to send Json.");
+    }
+  } else {
+    mySerial.println("MQTT not connected, cannot send Json.");
   }
 }
-void loop() {
 
+void loop() {
   unsigned long currentMillis = millis();
 
   // Check if it's time to reset
   if (currentMillis - lastResetTime >= resetInterval) {
-    Serial.println("5 minutes passed, resetting...");
+    mySerial.println("5 minutes passed, resetting...");
     ESP.restart(); // Resets the ESP32
     lastResetTime = currentMillis; // Update the last reset time, though not strictly necessary as the device will restart
   }
@@ -279,6 +456,8 @@ void loop() {
   ArduinoOTA.handle();
 
   readAndPublishSensorData();
+  checkHeap();
 
   delay(2000);  // Delay for 2 seconds (must not be higher that 5 or OTA will not work)
 }
+
