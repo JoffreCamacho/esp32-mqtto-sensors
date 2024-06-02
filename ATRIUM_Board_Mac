@@ -138,7 +138,7 @@ void setupI2CScannerWebServer() { // Function to set up the web server
 }
 
 void initializePins() { // List of all GPIO pins you intend to initialize
-  int gpioPins[] = {5, 12, 13, 14, 15, 16, 17, 18, 19, 25, 26, 27, 32, 33}; 
+  int gpioPins[] = {5, 12, 13, 14, 15, 16, 17, 19, 25, 26, 27, 32, 33}; 
   int numPins = sizeof(gpioPins) / sizeof(gpioPins[0]); 
   
   for(int i = 0; i < numPins; i++) {
@@ -153,6 +153,9 @@ void initializePins() { // List of all GPIO pins you intend to initialize
   pinMode(TURBIDITY_SENSOR_PIN, INPUT);
   pinMode(TDS_SENSOR_PIN, INPUT);
   pinMode(LIGHT_SENSOR_PIN, INPUT);
+    // Initialize ultrasonic sensor pins
+  pinMode(TRIGGER_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
 }
 
 void setupWiFi() {
@@ -339,6 +342,25 @@ void connectToMqtt() {
   }
 }
 
+float readDistance() {
+  digitalWrite(TRIGGER_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIGGER_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIGGER_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  float distance = (duration / 2.0) * 0.0343; // Convert duration to distance in cm
+
+  mySerial.print("Duration: ");
+  mySerial.print(String(duration));  // Convert long int to String
+  mySerial.print(" us, Distance: ");
+  mySerial.print(String(distance, 2)); // Convert float to String with 2 decimal places
+  mySerial.println(" cm");
+
+  return distance;
+}
+
 void readAndPublishSensorData() {
   sensors1.requestTemperatures();
   float temperatureC1 = sensors1.getTempCByIndex(0);  
@@ -376,6 +398,7 @@ void readAndPublishSensorData() {
   int turbidity = 0;
   int tdsValue = 0;
   int CO2 = readCO2();
+
   if (CO2 < 0 || CO2 > 10000) {  // Example range, adjust as necessary
     Serial.println("Invalid CO2 reading");
     CO2 = 0;  // Set to a default or error value
@@ -388,8 +411,9 @@ void readAndPublishSensorData() {
   }
   lightIntensity /= numSamples;
 
-  unsigned int uS = sonar.ping();
-  float distance = uS / US_ROUNDTRIP_CM;  
+  //unsigned int uS = sonar.ping();
+  float distance = readDistance();
+  //float distance = uS / US_ROUNDTRIP_CM;  
 
   String macAddress = WiFi.macAddress();
   StaticJsonDocument<512> doc;
