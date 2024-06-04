@@ -361,6 +361,16 @@ float readDistance() {
   return distance;
 }
 
+float readTDS(float temperature) {
+  int analogValue = analogRead(TDS_SENSOR_PIN);
+  float voltage = analogValue * (3.3 / 4095.0);
+  float compensationCoefficient = 1.0 + 0.02 * (temperature - 25.0);
+  float compensationVoltage = voltage / compensationCoefficient;
+  float tdsValue = (133.42 * compensationVoltage * compensationVoltage * compensationVoltage
+                    - 255.86 * compensationVoltage * compensationVoltage
+                    + 857.39 * compensationVoltage) * TDS_FACTOR;
+  return tdsValue;
+}
 void readAndPublishSensorData() {
   sensors1.requestTemperatures();
   float temperatureC1 = sensors1.getTempCByIndex(0);  
@@ -400,7 +410,7 @@ void readAndPublishSensorData() {
   int CO2 = readCO2();
 
   if (CO2 < 0 || CO2 > 10000) {  // Example range, adjust as necessary
-    Serial.println("Invalid CO2 reading");
+    mySerial.println("Invalid CO2 reading");
     CO2 = 0;  // Set to a default or error value
   }
 
@@ -414,6 +424,9 @@ void readAndPublishSensorData() {
   //unsigned int uS = sonar.ping();
   float distance = readDistance();
   //float distance = uS / US_ROUNDTRIP_CM;  
+
+   // Read and calculate TDS
+  float tdsValue = readTDS(bmeTemperature);
 
   String macAddress = WiFi.macAddress();
   StaticJsonDocument<512> doc;
