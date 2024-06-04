@@ -7,6 +7,7 @@
 
 #define DEFAULT_VREF    1100        // Default Vref in mV (use 1100 unless you've measured a different value)
 #define NO_OF_SAMPLES   64          // Multisampling
+#define TDS_FACTOR 0.5              // Conversion factor for TDS calculation
 
 esp_adc_cal_characteristics_t *adc_chars;
 
