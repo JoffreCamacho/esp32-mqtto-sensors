@@ -10,7 +10,7 @@ int t = mil * seg;
 
 //// Configuracion Inalambrica
 const char* ssid = "Best";
-const char* password = "Delmar77011";
+const char* password = "********";
 
 // Configuracion de MQTTO
 const char* mqttServer = "192.168.1.99";
